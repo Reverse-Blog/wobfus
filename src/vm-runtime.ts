@@ -12,144 +12,23 @@ export interface VmProgram {
 }
 
 type PackedFunction = [string[], Instruction[], boolean, string | null];
-type PackedProgram = [number[], Array<[number, string[]]>, PackedFunction[]];
-type RuntimeProgram = [VmProgram['instructions'], PackedProgram[1], PackedFunction[]];
+type RuntimeProgram = [VmProgram['instructions'], Array<[number, string[]]>, PackedFunction[]];
 
 export function serializeVm(program: VmProgram): string {
-  const payload: PackedProgram = [
-    Object.values(program.instructions),
+  const payload: RuntimeProgram = [
+    program.instructions,
     Object.entries(program.globals).map(([opcode, path]) => [Number(opcode), path]),
     program.functions.map(({ parameters, code, arrow, name }) => [parameters, code, arrow, name]),
   ];
-  const ast = parse(`(()=>{"use strict";return (${executeVm.toString()})((${decodeVmPayload.toString()})(null,null,null))})()`);
-  let dispatchBindingFound = false;
-  const instructionNames = Object.keys(program.instructions);
+  const ast = parse(`(()=>{"use strict";return (${executeVm.toString()})(${JSON.stringify(payload)})})()`);
   traverse(ast, {
     ClassProperty(path) {
       if (path.node.value == null) path.remove();
     },
-    VariableDeclarator(path) {
-      if (
-        t.isIdentifier(path.node.id) &&
-        t.isMemberExpression(path.node.init) &&
-        path.node.init.computed &&
-        t.isNumericLiteral(path.node.init.property, { value: 0 })
-      ) {
-        const binding = path.scope.getBinding(path.node.id.name);
-        if (!binding) throw new Error('Missing runtime dispatch binding.');
-        for (const reference of binding.referencePaths) {
-          const lookup = reference.parentPath;
-          if (
-            !lookup?.isMemberExpression() ||
-            lookup.node.object !== reference.node ||
-            lookup.node.computed ||
-            !t.isIdentifier(lookup.node.property)
-          ) throw new Error('Unsupported runtime opcode lookup.');
-          const index = instructionNames.indexOf(lookup.node.property.name);
-          const opcode = Object.values(program.instructions)[index];
-          if (opcode === undefined) throw new Error('Missing runtime instruction opcode.');
-          lookup.replaceWith(t.numericLiteral(opcode));
-        }
-        dispatchBindingFound = true;
-        path.remove();
-      }
-    },
   });
-  if (!dispatchBindingFound) throw new Error('Runtime instruction dispatch was not found.');
-  const key = crypto.getRandomValues(new Uint32Array(1))[0]! & 0xffff;
-  let scope: Scope | undefined;
-  traverse(ast, {
-    Program(path) {
-      scope = path.scope;
-      path.stop();
-    },
-  });
-  if (!scope) throw new Error('Missing generated runtime scope.');
-  const decoder = scope.generateUidIdentifier('decode');
-  const alphabet = scope.generateUidIdentifier('alphabet');
-  const stringKey = scope.generateUidIdentifier('key');
-  const decodedString = (value: string) => t.callExpression(t.cloneNode(decoder), [
-    t.stringLiteral(encodeBig5(value, key)), t.cloneNode(alphabet), t.cloneNode(stringKey),
-  ]);
-  traverse(ast, {
-    MemberExpression: {
-      exit(path) {
-        if (!path.node.computed && t.isIdentifier(path.node.property)) {
-          path.replaceWith(t.memberExpression(
-            path.node.object, decodedString(path.node.property.name), true,
-          ));
-          path.skip();
-        }
-      },
-    },
-    StringLiteral(path) {
-      if (path.parentPath.isObjectProperty() && path.key === 'key') {
-        path.parentPath.node.computed = true;
-      }
-      path.replaceWith(decodedString(path.node.value));
-      path.skip();
-    },
-    TemplateLiteral: {
-      exit(path) {
-        const expressions: t.Expression[] = [];
-        path.node.quasis.forEach((quasi, index) => {
-          if (quasi.value.cooked == null) throw new Error('Invalid runtime template literal.');
-          expressions.push(decodedString(quasi.value.cooked));
-          const expression = path.node.expressions[index];
-          if (expression) {
-            t.assertExpression(expression);
-            expressions.push(expression);
-          }
-        });
-        path.replaceWith(t.templateLiteral(
-          Array.from({ length: expressions.length + 1 }, (_, index) =>
-            t.templateElement({ raw: '', cooked: '' }, index === expressions.length)),
-          expressions,
-        ));
-        path.skip();
-      },
-    },
-  });
-  const statement = ast.program.body[0];
-  t.assertExpressionStatement(statement);
-  t.assertCallExpression(statement.expression);
-  t.assertArrowFunctionExpression(statement.expression.callee);
-  t.assertBlockStatement(statement.expression.callee.body);
-  const returnStatement = statement.expression.callee.body.body[0];
-  t.assertReturnStatement(returnStatement);
-  t.assertCallExpression(returnStatement.argument);
-  const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
-  const payloadCall = returnStatement.argument.arguments[0];
-  t.assertCallExpression(payloadCall);
-  payloadCall.arguments = [
-    t.stringLiteral(encodeVmPayload(payload, seed)),
-    t.cloneNode(alphabet),
-    t.numericLiteral(seed),
-  ];
-  statement.expression.callee.body.body.unshift(
-    t.variableDeclaration('const', [
-      t.variableDeclarator(decoder, parseExpression(`(${decodeBig5.toString()})`)),
-      t.variableDeclarator(alphabet, t.stringLiteral(
-        Array.from(big5Alphabet, (_, index) => big5Identifier(index)).join(''),
-      )),
-      t.variableDeclarator(stringKey, t.numericLiteral(key)),
-    ]),
-  );
-  return renameBig5Identifiers(generate(ast, {
+  return generate(ast, {
     compact: true, comments: false, jsescOption: { minimal: true },
-  }).code);
-}
-
-function decodeBig5(value: string, alphabet: string, key: number): string {
-  let decoded = String();
-  for (let index = 0; index < value.length; index += 8) {
-    let code = 0;
-    for (let offset = 0; offset < 4; offset++) {
-      code = (code << 4) | (alphabet.indexOf(value[index + offset * 2]!) / 2);
-    }
-    decoded += String.fromCharCode(code ^ key);
-  }
-  return decoded;
+  }).code;
 }
 
 export function executeVm(program: RuntimeProgram): unknown {
@@ -182,12 +61,15 @@ export function executeVm(program: RuntimeProgram): unknown {
     constructor(
       target: unknown,
       receiver: unknown,
+      apiOpcode: number | undefined = undefined,
     ) {
       this.target = target;
       this.receiver = receiver;
+      this.apiOpcode = apiOpcode;
     }
     readonly target: unknown;
     readonly receiver: unknown;
+    readonly apiOpcode: number | undefined;
   }
 
   const operations: Record<string, (...args: never[]) => unknown> = {
@@ -274,6 +156,29 @@ export function executeVm(program: RuntimeProgram): unknown {
       object,
     );
   };
+  const apis = new Map([...globals].map(([opcode, path]) => [opcode, () => {
+    const name = path[0];
+    if (!name) throw new Error('Invalid API path.');
+    let target = globalReference(name);
+    for (const key of path.slice(1)) target = member(target.read(), key);
+    return target;
+  }]));
+  const invoke = (
+    stack: unknown[],
+    count: number,
+    construct: boolean,
+    apiOpcode: number | undefined = undefined,
+  ): unknown => {
+    const values = stack.splice(stack.length - count, count);
+    const target = stack.pop();
+    if (!(target instanceof CallTarget)) throw new Error('Invalid VM call target.');
+    if (target.apiOpcode !== apiOpcode) throw new Error('Mismatched VM API call opcode.');
+    const callable = target.target;
+    if (typeof callable !== 'function') throw new TypeError('VM call target is not a function');
+    return construct
+      ? Reflect.construct(callable, values)
+      : Reflect.apply(callable, target.receiver, values);
+  };
   const run = (
     index: number,
     parent: Environment | undefined,
@@ -297,13 +202,8 @@ export function executeVm(program: RuntimeProgram): unknown {
       if (!instruction) throw new Error('Missing VM instruction.');
       const [opcode, operand, extra] = instruction;
       const op = program[0];
-      if (globals.has(opcode)) {
-        const path = globals.get(opcode);
-        const name = path?.[0];
-        if (!path || !name) throw new Error('Invalid global opcode.');
-        let target = globalReference(name);
-        for (const key of path.slice(1)) target = member(target.read(), key);
-        stack.push(target);
+      if (apis.has(opcode)) {
+        stack.push(invoke(stack, Number(operand), Boolean(extra), opcode));
         continue;
       }
       switch (opcode) {
@@ -312,6 +212,12 @@ export function executeVm(program: RuntimeProgram): unknown {
         case op.bigint: stack.push(BigInt(String(operand))); break;
         case op.undefined: stack.push(undefined); break;
         case op.this: stack.push(thisValue); break;
+        case op.apiReference: {
+          const resolve = apis.get(Number(operand));
+          if (!resolve) throw new Error('Invalid API reference opcode.');
+          stack.push(resolve());
+          break;
+        }
         case op.typeofGlobal: {
           const name = globals.get(Number(operand))?.[0];
           if (!name) throw new Error('Invalid typeof global opcode.');
@@ -341,21 +247,15 @@ export function executeVm(program: RuntimeProgram): unknown {
         }
         case op.prepareCall: {
           const value = stack.pop();
+          const apiOpcode = operand === undefined ? undefined : Number(operand);
           stack.push(value instanceof Reference
-            ? new CallTarget(value.read(), value.receiver)
-            : new CallTarget(value, undefined));
+            ? new CallTarget(value.read(), value.receiver, apiOpcode)
+            : new CallTarget(value, undefined, apiOpcode));
           break;
         }
         case op.call:
         case op.construct: {
-          const values = stack.splice(stack.length - Number(operand), Number(operand));
-          const target = stack.pop();
-          if (!(target instanceof CallTarget)) throw new Error('Invalid VM call target.');
-          const callable = target.target;
-          if (typeof callable !== 'function') throw new TypeError('VM call target is not a function');
-          stack.push(opcode === op.construct
-            ? Reflect.construct(callable, values)
-            : Reflect.apply(callable, target.receiver, values));
+          stack.push(invoke(stack, Number(operand), opcode === op.construct));
           break;
         }
         case op.array: stack.push(stack.splice(stack.length - Number(operand), Number(operand))); break;
@@ -440,9 +340,6 @@ export function executeVm(program: RuntimeProgram): unknown {
   };
   return run(0, undefined, [], globalThis);
 }
-import { parse, parseExpression } from '@babel/parser';
-import traverse, { type Scope } from '@babel/traverse';
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
 import generate from '@babel/generator';
-import * as t from '@babel/types';
-import { big5Alphabet, big5Identifier, encodeBig5, renameBig5Identifiers } from './big5.ts';
-import { decodeVmPayload, encodeVmPayload } from './vm-payload.ts';

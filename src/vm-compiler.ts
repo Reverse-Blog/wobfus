@@ -1,41 +1,22 @@
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import * as t from '@babel/types';
-import { big5Identifier } from './big5.ts';
 import type { Instruction, VmFunction, VmProgram } from './vm-runtime.js';
 
 const instructionNames = [
   'constant', 'number', 'bigint', 'undefined', 'this', 'local', 'read', 'member',
   'write', 'update', 'call', 'construct', 'array', 'object', 'property', 'closure',
   'pop', 'duplicate', 'binary', 'unary', 'jump', 'jumpFalse', 'jumpTrue',
-  'jumpNotNull', 'enter', 'cloneScope', 'leave', 'initialize', 'return', 'prepareCall', 'typeofGlobal',
+  'jumpNotNull', 'enter', 'cloneScope', 'leave', 'initialize', 'return', 'prepareCall', 'typeofGlobal', 'apiReference',
 ] as const;
 type Binding = [string, string];
 
 export function compileVm(source: string): VmProgram {
   const ast = parse(source, { sourceType: 'script' });
-  const used = new Set<number>();
-  const randomOpcode = () => {
-    let opcode: number;
-    do {
-      opcode = 0x1000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 0xffff000);
-    } while (used.has(opcode));
-    used.add(opcode);
-    return opcode;
-  };
-  const instructions = Object.fromEntries(instructionNames.map((name) => [name, randomOpcode()]));
+  const instructions = Object.fromEntries(instructionNames.map((name, opcode) => [name, opcode]));
+  let nextGlobalOpcode = instructionNames.length;
   const globals: Record<number, string[]> = {};
   const globalCodes = new Map<string, number>();
-  const localNames = new Map<string, string>();
-  const localName = (name: string): string => {
-    if (name === 'arguments') return name;
-    let token = localNames.get(name);
-    if (token === undefined) {
-      token = big5Identifier(localNames.size);
-      localNames.set(name, token);
-    }
-    return token;
-  };
   const localIdentifiers = new WeakSet<t.Identifier>();
   traverse(ast, {
     Identifier(path) {
@@ -55,7 +36,7 @@ export function compileVm(source: string): VmProgram {
       if (path[0] === 'eval' || path[0] === 'Function') {
         throw new SyntaxError('Dynamic code execution is not supported by the VM.');
       }
-      code = randomOpcode();
+      code = nextGlobalOpcode++;
       globalCodes.set(key, code);
       globals[code] = path;
     }
@@ -72,12 +53,12 @@ export function compileVm(source: string): VmProgram {
     const code: Instruction[] = [];
     const names = parameters.map((parameter) => {
       if (!t.isIdentifier(parameter)) return fail(parameter, 'Only plain function parameters are supported');
-      return localName(parameter.name);
+      return parameter.name;
     });
     if (new Set(names).size !== names.length) {
       throw new SyntaxError('Duplicate VM function parameters are not supported.');
     }
-    functions.push({ parameters: names, code, arrow, name: selfName === undefined ? null : localName(selfName) });
+    functions.push({ parameters: names, code, arrow, name: selfName ?? null });
     const emit = (name: string, ...args: unknown[]): number => {
       const opcode = instructions[name];
       if (opcode === undefined) throw new Error(`Missing compiler opcode: ${name}`);
@@ -104,11 +85,11 @@ export function compileVm(source: string): VmProgram {
     const emitReference = (node: t.Node): void => {
       const path = globalPath(node);
       if (path) {
-        code.push([globalCode(path)]);
+        emit('apiReference', globalCode(path));
         return;
       }
       if (t.isIdentifier(node)) {
-        emit('local', localName(node.name));
+        emit('local', node.name);
       } else if (t.isMemberExpression(node)) {
         if (!t.isExpression(node.object)) return fail(node);
         expression(node.object);
@@ -188,14 +169,20 @@ export function compileVm(source: string): VmProgram {
         emitReference(node.argument);
         emit('update', node.operator === '++' ? 'increment' : 'decrement', node.prefix);
       } else if (t.isCallExpression(node) || t.isNewExpression(node)) {
+        const api = globalPath(node.callee);
         if (t.isIdentifier(node.callee) || t.isMemberExpression(node.callee)) emitReference(node.callee);
         else expression(node.callee);
-        emit('prepareCall');
+        if (api) emit('prepareCall', globalCode(api));
+        else emit('prepareCall');
         for (const argument of node.arguments) {
           if (!t.isExpression(argument)) return fail(argument);
           expression(argument);
         }
-        emit(t.isNewExpression(node) ? 'construct' : 'call', node.arguments.length);
+        if (api) {
+          code.push([globalCode(api), node.arguments.length, t.isNewExpression(node)]);
+        } else {
+          emit(t.isNewExpression(node) ? 'construct' : 'call', node.arguments.length);
+        }
       } else if (t.isArrayExpression(node)) {
         for (const element of node.elements) {
           if (!element || t.isSpreadElement(element)) return fail(node, 'Sparse arrays and spread are not supported');
@@ -235,7 +222,7 @@ export function compileVm(source: string): VmProgram {
       if (t.isVariableDeclaration(node, { kind: 'var' })) {
         for (const declaration of node.declarations) {
           if (!t.isIdentifier(declaration.id)) return fail(declaration.id);
-          varNames.add(localName(declaration.id.name));
+          varNames.add(declaration.id.name);
         }
       }
       for (const key of t.VISITOR_KEYS[node.type] ?? []) {
@@ -262,10 +249,10 @@ export function compileVm(source: string): VmProgram {
         if (t.isVariableDeclaration(statement) && statement.kind !== 'var') {
           for (const declaration of statement.declarations) {
             if (!t.isIdentifier(declaration.id)) return fail(declaration.id);
-            bindings.push([localName(declaration.id.name), statement.kind]);
+            bindings.push([declaration.id.name, statement.kind]);
           }
         } else if (t.isFunctionDeclaration(statement) && statement.id) {
-          bindings.push([localName(statement.id.name), 'let']);
+          bindings.push([statement.id.name, 'let']);
         }
       }
       emit('enter', bindings);
@@ -274,7 +261,7 @@ export function compileVm(source: string): VmProgram {
         if (t.isFunctionDeclaration(declaration)) {
           if (!declaration.id || declaration.async || declaration.generator) return fail(declaration);
           emit('closure', compileFunction(declaration.body.body, declaration.params, false));
-          emit('initialize', localName(declaration.id.name));
+          emit('initialize', declaration.id.name);
         }
       }
       statements.forEach(statement);
@@ -292,7 +279,7 @@ export function compileVm(source: string): VmProgram {
           if (!t.isIdentifier(declaration.id)) return fail(declaration.id);
           if (node.kind === 'var') {
             if (declaration.init) {
-              emit('local', localName(declaration.id.name));
+              emit('local', declaration.id.name);
               expression(declaration.init);
               emit('write');
               emit('pop');
@@ -300,7 +287,7 @@ export function compileVm(source: string): VmProgram {
           } else {
             if (declaration.init) expression(declaration.init);
             else emit('undefined');
-            emit('initialize', localName(declaration.id.name));
+            emit('initialize', declaration.id.name);
           }
         }
       } else if (t.isReturnStatement(node)) {
@@ -321,7 +308,7 @@ export function compileVm(source: string): VmProgram {
         if (lexical) {
           emit('enter', lexical.declarations.map((declaration): Binding => {
             if (!t.isIdentifier(declaration.id)) return fail(declaration.id);
-            return [localName(declaration.id.name), lexical.kind];
+            return [declaration.id.name, lexical.kind];
           }));
           depth++;
         }

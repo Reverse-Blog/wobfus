@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { compileVm } from "../src/vm-compiler.ts";
 import { serializeVm } from "../src/vm-runtime.ts";
-import { renameBig5Identifiers } from "../src/big5.ts";
+import { obfuscateWithMetadata } from "../src/obfuscate.ts";
 
 function execute(source) {
   const output = [];
@@ -25,7 +25,7 @@ test("executes Fibonacci bytecode with dynamic code generation disabled", () => 
   `), [[55]]);
 });
 
-test("replaces source binding names throughout bytecode without changing scopes or property keys", () => {
+test("preserves readable source bindings without changing scopes or property keys", () => {
   const source = `
     function fibonacciNamed(inputNumber) {
       if (inputNumber <= 1) return inputNumber;
@@ -49,13 +49,13 @@ test("replaces source binding names throughout bytecode without changing scopes 
   for (const name of [
     "fibonacciNamed", "inputNumber", "calculateResult", "recursiveNamed", "captureArguments",
   ]) {
-    assert.ok(!JSON.stringify(program.functions).includes(name), `Leaked binding: ${name}`);
-    assert.ok(!generated.includes(name), `Leaked source name: ${name}`);
+    assert.ok(JSON.stringify(program.functions).includes(name), `Missing binding: ${name}`);
+    assert.ok(generated.includes(name), `Missing source name: ${name}`);
   }
   assert.deepEqual(execute(source), [[9], [55, 120, 6, 7, 7, "literal preserved"]]);
 });
 
-test("assigns collision-free random instruction and per-API opcodes", () => {
+test("assigns small, deterministic, collision-free instruction and per-API opcodes", () => {
   const source = "const cache = new WeakMap(); console.log(cache); console.log(Math.max(1, 2));";
   const first = compileVm(source);
   const second = compileVm(source);
@@ -65,20 +65,115 @@ test("assigns collision-free random instruction and per-API opcodes", () => {
   ]);
   const codes = [...Object.values(first.instructions), ...entries.map(([code]) => Number(code))];
   assert.equal(new Set(codes).size, codes.length);
-  assert.notDeepEqual(first.instructions, second.instructions);
+  assert.deepEqual(first, second);
+  assert.deepEqual(codes.toSorted((a, b) => a - b), Array.from({ length: codes.length }, (_, i) => i));
   const emitted = first.functions.flatMap(({ code }) => code.map(([opcode]) => opcode));
   for (const [opcode] of entries) assert.ok(emitted.includes(Number(opcode)));
-  assert.ok(emitted.includes(first.instructions.construct));
-  assert.ok(emitted.includes(first.instructions.call));
+  assert.ok(!emitted.includes(first.instructions.construct));
+  assert.ok(!emitted.includes(first.instructions.call));
+  assert.ok(emitted.includes(first.instructions.apiReference));
 });
 
-test("serialized output omits instruction names and the symbolic dispatch table", () => {
+test("reuses each API invocation opcode instead of generic calls and constructors", () => {
+  const program = compileVm(`
+    console.log(Math.max(1, 2));
+    console["log"](Math.max(3, 4));
+    new WeakMap();
+    new WeakMap();
+  `);
+  const code = program.functions.flatMap((fn) => fn.code);
+  assert.equal(Object.keys(program.globals).length, 3);
+  for (const [opcode, path] of Object.entries(program.globals)) {
+    const calls = code.filter(([instruction]) => instruction === Number(opcode));
+    assert.equal(calls.length, 2, `Missing reused calls for ${path.join(".")}`);
+    for (const [, count, construct] of calls) {
+      assert.equal(count, path[0] === "WeakMap" ? 0 : path[0] === "Math" ? 2 : 1);
+      assert.equal(construct, path[0] === "WeakMap");
+    }
+  }
+  assert.ok(!code.some(([opcode]) =>
+    opcode === program.instructions.call || opcode === program.instructions.construct));
+});
+
+test("global reads and writes prepare references without invoking API opcodes", () => {
+  const source = `
+    const original = Math.max;
+    Math.max = function (a, b) { return a + b; };
+    console.log(Math.max(2, 3));
+    Math.max = original;
+    console.log(Math.max(2, 3), typeof __missingVmGlobal);
+  `;
+  assert.deepEqual(execute(source), [[5], [3, "undefined"]]);
+});
+
+test("rejects an API invocation opcode that does not match the prepared target", () => {
+  const program = compileVm("console.log(Math.max(1, 2));");
+  const apiCodes = Object.entries(program.globals);
+  const logCode = Number(apiCodes.find(([, path]) => path.join(".") === "console.log")[0]);
+  const maxCode = Number(apiCodes.find(([, path]) => path.join(".") === "Math.max")[0]);
+  const call = program.functions[0].code.find(([opcode]) => opcode === logCode);
+  assert.ok(call);
+  call[0] = maxCode;
+  assert.throws(() => runInNewContext(serializeVm(program)), /Mismatched VM API call opcode/);
+});
+
+test("API dispatch preserves getters, receivers, argument order, and changed methods", () => {
+  const source = `
+    let order = 0;
+    const first = api.method(api.method = function (value) { return this.value + 100; });
+    const second = api.method();
+    const third = new api.Box(++order);
+    console.log(first, second, third.value, order);
+  `;
+  const run = (code) => {
+    const output = [];
+    let gets = 0;
+    let current = function () { return this.value; };
+    const api = {
+      value: 7,
+      get method() { gets++; return current; },
+      set method(value) { current = value; },
+      Box: class {
+        constructor(value) { this.value = value; }
+      },
+    };
+    runInNewContext(code, { api, console: { log: (...args) => output.push(args) } }, {
+      contextCodeGeneration: { strings: false, wasm: false }, timeout: 2000,
+    });
+    return { output, gets };
+  };
+  const expected = run(`"use strict";${source}`);
+  assert.deepEqual(run(serializeVm(compileVm(source))), expected);
+  assert.deepEqual(expected, { output: [[7, 107, 1, 1]], gets: 2 });
+  assert.throws(() => execute("Math.max = 1; Math.max();"), /not a function/);
+});
+
+test("local, instance, and dynamic calls keep generic dispatch and native semantics", () => {
+  const source = `
+    function choose(console) { console.log(); }
+    const object = { value: 9, log: function () { return this.value; } };
+    const key = "log";
+    choose(object);
+    console.log(object[key](), Math["m" + "ax"](2, 4));
+  `;
+  const program = compileVm(source);
+  assert.deepEqual(Object.values(program.globals), [["console", "log"], ["Math"]]);
+  assert.deepEqual(execute(source), [[9, 4]]);
+});
+
+test("serialized output keeps readable instruction dispatch and matching debug metadata", () => {
   const program = compileVm("let value = 1; value++; console.log(value);");
   const generated = serializeVm(program);
-  assert.doesNotMatch(generated, /\binstructions\b|\bop\.(?:read|write|call|construct)\b/);
-  assert.doesNotMatch(generated, /prepareCall|jumpFalse|jumpTrue|jumpNotNull|cloneScope|typeofGlobal/);
+  const result = obfuscateWithMetadata("let value = 1; value++; console.log(value);");
+  assert.equal(result.code, generated);
   for (const name of Object.keys(program.instructions)) {
-    assert.ok(!generated.includes(`"${name}":`), `Leaked instruction key: ${name}`);
+    assert.ok(generated.includes(`op.${name}`), `Missing instruction dispatch: ${name}`);
+    assert.ok(result.opcodes.some((entry) =>
+      entry.name === name && entry.opcode === program.instructions[name] && entry.kind === "instruction"));
+  }
+  for (const [opcode, path] of Object.entries(program.globals)) {
+    assert.ok(result.opcodes.some((entry) =>
+      entry.name === path.join(".") && entry.opcode === Number(opcode) && entry.kind === "API"));
   }
   const output = [];
   runInNewContext(generated, { console: { log: (value) => output.push(value) } }, {
@@ -87,18 +182,18 @@ test("serialized output omits instruction names and the symbolic dispatch table"
   assert.deepEqual(output, [2]);
 });
 
-test("packs VM metadata and encodes global and property names", () => {
+test("packs plain VM metadata without encoding source strings or properties", () => {
   const generated = serializeVm(compileVm(`
     const secretKey = "hidden value";
     const box = { recognizableProperty: secretKey };
     console.log(box.recognizableProperty);
   `));
   for (const text of [
-    "globals", "functions", "parameters", "recognizableProperty",
-    "hidden value", "console", "log",
+    "recognizableProperty", "hidden value", "console", "log",
   ]) {
-    assert.ok(!generated.includes(text), `Leaked packed metadata: ${text}`);
+    assert.ok(generated.includes(text), `Missing readable metadata: ${text}`);
   }
+  assert.doesNotMatch(generated, /[\u200c\u200d]/u);
   const output = [];
   runInNewContext(generated, { console: { log: (value) => output.push(value) } }, {
     contextCodeGeneration: { strings: false, wasm: false },
@@ -283,30 +378,45 @@ test("minified Fibonacci compiles and executes through the same pipeline as the 
   assert.deepEqual(execute(result.code), [[55]]);
 });
 
-test("final formatted output keeps Fibonacci names removed after both minification passes", async () => {
+test("plain Fibonacci VM output stays compact and executes after playground minification", async () => {
   const { minify } = await import("vite");
   const { format } = await import("prettier");
-  const source = await minify("source.js", `
+  const source = `
     function fibonacci(n) {
       if (n <= 1) return n;
       return fibonacci(n - 1) + fibonacci(n - 2);
     }
     console.log(fibonacci(10));
-  `, { module: false, compress: true, mangle: true });
-  assert.equal(source.errors.length, 0);
-  const generated = serializeVm(compileVm(source.code));
+  `;
+  const generated = serializeVm(compileVm(source));
   const minified = await minify("output.js", generated, {
     module: false, compress: true, mangle: true,
   });
   assert.equal(minified.errors.length, 0);
   assert.ok(minified.code.length < generated.length);
-  const formatted = await format(renameBig5Identifiers(minified.code), { parser: "babel" });
-  assert.doesNotMatch(formatted, /fibonacci/);
+  assert.ok(Buffer.byteLength(generated) < 16_000);
+  assert.ok(Buffer.byteLength(minified.code) < 10_000);
+  assert.match(minified.code, /fibonacci/);
+  assert.doesNotMatch(minified.code, /[\u200c\u200d]/u);
+  const formatted = await format(minified.code, { parser: "babel" });
+  assert.ok(formatted.split("\n").length > 1);
   const output = [];
   runInNewContext(formatted, { console: { log: (value) => output.push(value) } }, {
     contextCodeGeneration: { strings: false, wasm: false }, timeout: 2000,
   });
   assert.deepEqual(output, [55]);
+});
+
+test("plain payload size grows approximately one byte per ASCII literal byte", () => {
+  const literal = "x".repeat(4096);
+  const small = serializeVm(compileVm('console.log("");'));
+  const large = serializeVm(compileVm(`console.log("${literal}");`));
+  assert.equal(Buffer.byteLength(large) - Buffer.byteLength(small), literal.length);
+  const output = [];
+  runInNewContext(large, { console: { log: (value) => output.push(value) } }, {
+    contextCodeGeneration: { strings: false, wasm: false }, timeout: 2000,
+  });
+  assert.deepEqual(output, [literal]);
 });
 
 test("minifies both source and VM output without requiring dynamic code generation", async () => {

@@ -79,28 +79,19 @@ test("renames bindings without changing globals, shorthand keys, or shadowed clo
   assert.deepEqual(output, [15]);
 });
 
-test("encodes interpreter and payload literals while preserving arbitrary strings", () => {
+test("plain VM output preserves arbitrary strings without masking bindings or literals", () => {
   const values = ["", "\0", "quoted \" and \\ escaped", "\n\r\t", "\u{1f600}", "\ud800", "\udfff", "\u200c\u200d"];
   const source = `function identity(value) { return value; }
     console.log(${values.map((value) => `identity(${JSON.stringify(value)})`).join(",")});`;
   const program = compileVm(source);
   for (const fn of program.functions) {
-    for (const parameter of fn.parameters) assert.match(parameter, mixedName);
-    if (fn.name) assert.match(fn.name, mixedName);
+    for (const parameter of fn.parameters) assert.equal(parameter, "value");
   }
   const generated = serializeVm(program);
-  assertMixedBindings(generated);
+  assert.ok(generated.includes("identity"));
   traverse(parse(generated), {
     ClassProperty() {
       assert.fail("Generated runtime must not require ES2022 class fields.");
-    },
-    StringLiteral(path) {
-      if (path.node.value !== "") {
-        assert.match(path.node.value, mixedName);
-      }
-    },
-    TemplateElement(path) {
-      assert.equal(path.node.value.raw, "");
     },
   });
   const output = [];
