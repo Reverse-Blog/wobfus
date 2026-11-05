@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/obfuscate.ts",
+    "src/preview.ts",
+    "src/vite-env.d.ts"
+  ]
+}
