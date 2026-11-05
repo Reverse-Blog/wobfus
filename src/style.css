@@ -2,8 +2,9 @@
 
 :root {
   font-family: ui-sans-serif, system-ui, sans-serif;
-  color: #f0f0f5;
-  background: #0c0d10;
+  color-scheme: dark;
+  color: #e6edf3;
+  background: #0d1117;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -11,9 +12,11 @@
   font-optical-sizing: auto;
   font-weight: 400;
 
-  --muted: #898b98;
-  --panel: #131419;
-  --accent: #b7f36b;
+  --muted: #8b949e;
+  --panel: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --accent: #58a6ff;
 }
 
 * {
@@ -24,9 +27,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(ellipse at 50% 0, rgb(183 243 107 / 7%), transparent 34rem),
-    #0c0d10;
+  background: #0d1117;
 }
 
 button {
@@ -50,6 +51,8 @@ button {
   flex-wrap: wrap;
   gap: 8px 16px;
   padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
@@ -58,6 +61,13 @@ button {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.5px;
+  gap: 12px;
+}
+
+.brand-logo {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .field-heading,
@@ -83,15 +93,16 @@ button {
 .editor {
   min-width: 0;
   overflow: hidden;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   background: var(--panel);
 }
 
 .debug-panel {
   grid-column: 1 / -1;
   overflow: hidden;
-  border: 1px solid #25262d;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   background: var(--panel);
 }
 
@@ -117,10 +128,10 @@ button {
   width: 100%;
   min-height: 34px;
   padding: 6px 10px;
-  border: 1px solid #30313a;
-  border-radius: 5px;
-  background: #17181e;
-  color: #d7d8df;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: #e6edf3;
   font: 11px ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -147,8 +158,8 @@ button {
   justify-content: space-between;
   gap: 16px;
   padding: 6px 16px;
-  background: #17181e;
-  color: #d7d8df;
+  background: var(--surface);
+  color: #e6edf3;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 11px;
   overflow-wrap: anywhere;
@@ -167,10 +178,15 @@ button {
 }
 
 .field-heading {
-  min-height: 34px;
+  min-height: 40px;
   padding: 0 16px;
-  color: #c9cad2;
+  background: var(--surface);
+  color: #e6edf3;
   font-size: 11px;
+}
+
+summary.field-heading {
+  cursor: pointer;
 }
 
 .code-editor {
@@ -181,6 +197,8 @@ button {
 .file-size {
   margin: 0;
   padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
   color: var(--muted);
   font-size: 11px;
 }
@@ -197,16 +215,16 @@ button {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: 0;
-  border-radius: 9px;
-  background: #26272d;
-  color: #c9cad2;
+  border: 1px solid rgb(240 246 252 / 10%);
+  border-radius: 6px;
+  background: #238636;
+  color: #ffffff;
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
   transition:
     background 150ms ease,
-    transform 150ms ease;
+    border-color 150ms ease;
 }
 
 .run-button:disabled {
@@ -215,17 +233,24 @@ button {
 }
 
 .preview-button {
-  background: #23312a;
-  color: #b7f36b;
+  background: #21262d;
+  color: #e6edf3;
+  border-color: var(--border);
 }
 
 .run-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: #32333b;
+  background: #2ea043;
 }
 
-.run-button:focus-visible {
-  outline: 2px solid #f0f0f5;
+.preview-button:hover:not(:disabled) {
+  background: #30363d;
+  border-color: #8b949e;
+}
+
+.run-button:focus-visible,
+.global-api-filter input:focus-visible,
+summary.field-heading:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -240,7 +265,9 @@ button {
 
 .footer {
   margin-top: 40px;
-  color: #666873;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
   font-size: 10px;
   text-align: center;
 }

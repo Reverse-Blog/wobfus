@@ -7,8 +7,6 @@ import * as estreePlugin from "prettier/plugins/estree";
 import { obfuscateWithMetadata } from "./obfuscate.js";
 import { formatSize } from "./format-size.js";
 import { findGlobalCalls, listGlobalApis } from "./global-calls.js";
-import { compileVm } from "./vm-compiler.js";
-import { renameBig5Identifiers } from "./big5.ts";
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -19,6 +17,29 @@ globalThis.MonacoEnvironment = {
     return new EditorWorker();
   },
 };
+
+monaco.editor.defineTheme("wobfus-dark", {
+  base: "vs-dark",
+  inherit: true,
+  rules: [
+    { token: "comment", foreground: "8B949E" },
+    { token: "keyword", foreground: "FF7B72" },
+    { token: "string", foreground: "A5D6FF" },
+    { token: "number", foreground: "79C0FF" },
+  ],
+  colors: {
+    "editor.background": "#0d1117",
+    "editor.foreground": "#e6edf3",
+    "editorLineNumber.foreground": "#6e7681",
+    "editorLineNumber.activeForeground": "#e6edf3",
+    "editorCursor.foreground": "#58a6ff",
+    "editor.selectionBackground": "#264f78",
+    "editor.inactiveSelectionBackground": "#21262d",
+    "editorWidget.background": "#161b22",
+    "editorWidget.border": "#30363d",
+    "editorIndentGuide.background1": "#21262d",
+  },
+});
 
 const form = document.querySelector<HTMLFormElement>("#obfuscator");
 const sourceContainer = document.querySelector<HTMLDivElement>("#source");
@@ -187,7 +208,7 @@ ctx.fillText("stay a little mysterious.", 500, 485);
 console.log("%c ", "display: inline-block; padding: 140px 250px; background: url('" + canvas.toDataURL() + "') center / contain no-repeat;");
 console.log("https://www.youtube.com/watch?v=dQw4w9WgXcQ");`,
   language: "javascript",
-  theme: "vs-dark",
+  theme: "wobfus-dark",
   ariaLabel: "Source code editor",
   formatOnPaste: true,
   formatOnType: true,
@@ -206,7 +227,7 @@ console.log("https://www.youtube.com/watch?v=dQw4w9WgXcQ");`,
 const output = monaco.editor.create(outputContainer, {
   value: "",
   language: "javascript",
-  theme: "vs-dark",
+  theme: "wobfus-dark",
   ariaLabel: "Obfuscated output editor",
   renderLineHighlight: "none",
   automaticLayout: true,
@@ -377,11 +398,9 @@ form.addEventListener("submit", async (event) => {
       plugins: [babelPlugin, estreePlugin],
     };
     const formattedSource = await format(sourceCode, options);
-    compileVm(formattedSource);
-    const minifiedSource = await minifyCode(formattedSource);
-    const result = obfuscateWithMetadata(minifiedSource);
+    const result = obfuscateWithMetadata(formattedSource);
     const minifiedOutput = await minifyCode(result.code);
-    const obfuscatedOutput = await format(renameBig5Identifiers(minifiedOutput), options);
+    const obfuscatedOutput = await format(minifiedOutput, options);
 
     source.pushUndoStop();
     source.executeEdits("format", [
@@ -392,7 +411,7 @@ form.addEventListener("submit", async (event) => {
     previewButton.disabled = false;
     renderGlobalCalls(findGlobalCalls(formattedSource));
     renderOpcodes(result.opcodes);
-    status.textContent = "Done. Code was minified before and after VM obfuscation, then formatted for display.";
+    status.textContent = "Done. Plain VM bytecode and runtime were minified without extra encoding, then formatted for display.";
   } catch (error) {
     output.setValue("");
     previewButton.disabled = true;

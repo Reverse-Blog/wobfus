@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Experimental JavaScript VM obfuscation with anti-LLM techniques.
+  Experimental lightweight JavaScript VM obfuscation demo.
 </p>
 
 ## What it does
@@ -13,20 +13,33 @@
 Wobfus transforms JavaScript into a less readable form while aiming to preserve
 its behavior. The browser playground lets you edit, obfuscate, inspect, and run
 the result.
+The playground uses a GitHub-inspired dark theme and the Wobfus trident logo.
 
-## Anti-LLM obfuscation
+## Lightweight VM output
 
-The demo combines several techniques intended to make code harder to follow
-for humans and language models:
+The demo keeps a simple virtual machine while prioritizing smaller output:
 
-- Randomized internal names and instructions.
-- Rare characters mixed with invisible Unicode.
-- Hidden text and indirect access to properties.
-- Execution through a custom virtual machine.
+- Small, sequential instruction and API opcodes.
+- One invocation opcode per statically known global API path, reused across calls.
+- Plain bytecode with readable source binding names, strings, and API paths.
+- A self-contained runtime, without encoded payloads or Unicode name masking.
+- Minified playground output, then formatted for readability.
 
-**This is an experimental demo, not a security feature.** “Anti-LLM” describes
-the intent, not proven resistance: the output can still be executed, inspected,
-and reverse-engineered.
+The playground compiles the source directly and minifies only the generated
+output. Each result still includes the VM runtime, so very small inputs will
+produce larger output than the original source.
+
+The runtime prepares a lazy API resolver registry once. Bytecode prepares the
+call target before its arguments, then invokes it using the API's own opcode
+(also for constructors). This preserves method receivers, getters, and API
+replacements without eagerly reading browser APIs. Local functions, instance
+methods, and dynamically computed API paths still use generic call instructions.
+API paths remain visible in the registry; the original JavaScript is not
+stored or evaluated as a source string.
+
+**This is an experimental demo, not a security feature.** Source names and
+literals are intentionally visible; the output can be inspected and
+reverse-engineered.
 
 Not all JavaScript features are supported. Always review the result and never
 run code from untrusted sources.
