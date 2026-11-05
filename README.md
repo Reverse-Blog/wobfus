@@ -30,10 +30,16 @@ names are retained only in generation-time debug metadata, not in that table in
 the output. The interpreter still exposes operation semantics: this makes analysis
 less convenient, not impossible, and is not a security guarantee.
 The interpreter itself does not use `eval` or `Function`.
-The source editor starts with a Fibonacci example and supports formatting on paste
-and typing. Submitting formats the source with Prettier, minifies it with Vite's
-built-in minifier, then obfuscates it, minifies the generated VM output again,
-and formats the final result with Prettier.
+The source editor starts with a muted abstract canvas shape and a sunglasses
+smiley, and supports formatting on paste and typing. The canvas is logged to the
+browser console rather than added to the page. Submitting formats the source with
+Prettier, minifies it with Vite's built-in minifier, then obfuscates it, minifies
+the generated VM output again, and formats the final result with Prettier. The
+generated VM payload uses positional arrays and encoded strings instead of
+readable metadata keys. Use **Run obfuscated code** to execute the generated
+output in a sandboxed iframe; the button stays disabled until output has been
+generated. This is a demo convenience, not a security boundary; do not run code
+from untrusted sources.
 Local variable, parameter, and function binding names are replaced with short
 internal identifiers in the bytecode, including top-level declarations.
 Property keys, global API paths, and string values are preserved. Final formatting
@@ -58,8 +64,9 @@ code protection; do not run generated code from untrusted sources.
 The VM supports plain parameters, normal functions and arrows, recursion,
 closures, `var`/`let`/`const`, blocks, `if`, `while`, classic `for`,
 unlabeled `break`/`continue`, `return`, arrays, plain object properties,
-property reads/writes, function calls, `new`, and basic arithmetic, comparison,
-bitwise, logical, assignment, update, and conditional expressions.
+property reads/writes, function calls, `new`, untagged template literals, and
+basic arithmetic, comparison, bitwise, logical, assignment, update, and
+conditional expressions.
 Normal functions use strict `this` semantics; arrows capture lexical `this`.
 Global API references are resolved in the execution environment, not eagerly
 captured during generation. Native method receivers and argument evaluation
@@ -68,8 +75,8 @@ order are preserved.
 Unsupported syntax produces an explicit error with its source location, without
 a dynamic-code fallback. This includes classes, modules, async/generators,
 exceptions, destructuring, spread/rest/default parameters, optional chaining,
-template/regexp literals, object methods/accessors, sparse arrays, `delete`,
-`for-in`/`for-of`, `do-while`, labels, and logical assignment operators.
+tagged templates and regexp literals, object methods/accessors, sparse arrays,
+`delete`, `for-in`/`for-of`, `do-while`, labels, and logical assignment operators.
 Function `arguments` is currently represented by an array, without sloppy-mode
 parameter aliasing or native arguments-object behavior. Function names and source
 reflection are not preserved. Direct `eval` and `Function` references are rejected.

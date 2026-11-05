@@ -29,7 +29,7 @@
         </div>
 
         <div class="editor result-editor">
-          <div class="field-heading" id="output-label">Output</div>
+          <div class="field-heading" id="output-label">Obfuscated output</div>
           <div
             class="code-editor"
             id="output"
@@ -37,10 +37,21 @@
           ></div>
           <p class="file-size">Output size: <span id="output-size">0 bytes</span></p>
         </div>
-        <button class="run-button" type="submit">
-          <span>wobfus code</span>
+        <button class="run-button" id="obfuscate-button" type="submit">
+          <span>Obfuscate code</span>
           <span aria-hidden="true">→</span>
         </button>
+        <button class="run-button preview-button" id="preview-button" type="button" disabled>
+          <span>Run obfuscated code</span>
+          <span aria-hidden="true">▶</span>
+        </button>
+        <iframe
+          id="preview-frame"
+          title="Obfuscated code runner"
+          sandbox="allow-scripts"
+          referrerpolicy="no-referrer"
+          hidden
+        ></iframe>
         <section class="debug-panel" aria-labelledby="debug-label">
           <div class="field-heading" id="debug-label">
             Detected global references

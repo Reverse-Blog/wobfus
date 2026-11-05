@@ -11,16 +11,20 @@ export interface VmProgram {
   functions: VmFunction[];
 }
 
+type PackedFunction = [string[], Instruction[], boolean, string | null];
+type PackedProgram = [number[], Array<[number, string[]]>, PackedFunction[]];
+
 export function serializeVm(program: VmProgram): string {
   const ast = parse(`(${executeVm.toString()})`);
   let dispatchBindingFound = false;
+  const instructionNames = Object.keys(program.instructions);
   traverse(ast, {
     VariableDeclarator(path) {
       if (
         t.isIdentifier(path.node.id) &&
         t.isMemberExpression(path.node.init) &&
-        !path.node.init.computed &&
-        t.isIdentifier(path.node.init.property, { name: 'instructions' })
+        path.node.init.computed &&
+        t.isNumericLiteral(path.node.init.property, { value: 0 })
       ) {
         const binding = path.scope.getBinding(path.node.id.name);
         if (!binding) throw new Error('Missing runtime dispatch binding.');
@@ -32,7 +36,8 @@ export function serializeVm(program: VmProgram): string {
             lookup.node.computed ||
             !t.isIdentifier(lookup.node.property)
           ) throw new Error('Unsupported runtime opcode lookup.');
-          const opcode = program.instructions[lookup.node.property.name];
+          const index = instructionNames.indexOf(lookup.node.property.name);
+          const opcode = Object.values(program.instructions)[index];
           if (opcode === undefined) throw new Error('Missing runtime instruction opcode.');
           lookup.replaceWith(t.numericLiteral(opcode));
         }
@@ -44,11 +49,40 @@ export function serializeVm(program: VmProgram): string {
   if (!dispatchBindingFound) throw new Error('Runtime instruction dispatch was not found.');
   const runtime = generate(ast, { compact: true, comments: false }).code;
   const expression = runtime.replace(/;$/, '');
-  const payload = { globals: program.globals, functions: program.functions };
-  return `(()=>{"use strict";return ${expression}(${JSON.stringify(payload)})})()`;
+  const key = crypto.getRandomValues(new Uint32Array(1))[0]! & 0xffff;
+  const packStrings = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      const codes: string[] = [];
+      for (let index = 0; index < value.length; index++) {
+        codes.push((value.charCodeAt(index) ^ key).toString(36));
+      }
+      return `~${codes.join('.')}`;
+    }
+    if (Array.isArray(value)) return value.map(packStrings);
+    return value;
+  };
+  const payload: PackedProgram = [
+    Object.values(program.instructions),
+    Object.entries(program.globals).map(([opcode, path]) => [Number(opcode), path]),
+    program.functions.map(({ parameters, code, arrow, name }) => [parameters, code, arrow, name]),
+  ];
+  return `(()=>{"use strict";return ${expression}(${JSON.stringify(packStrings(payload))},${key})})()`;
 }
 
-export function executeVm(program: VmProgram): unknown {
+export function executeVm(encodedProgram: PackedProgram, key: number): unknown {
+  const unpackStrings = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      if (!value.startsWith('~')) throw new Error('Invalid packed VM string.');
+      const codes = value.slice(1);
+      if (codes === '') return '';
+      return codes.split('.').map((code) => String.fromCharCode(parseInt(code, 36) ^ key)).join('');
+    }
+    if (Array.isArray(value)) return value.map(unpackStrings);
+    return value;
+  };
+  const program = unpackStrings(encodedProgram) as PackedProgram;
+  const globals = new Map(program[1]);
+  const functions = program[2];
   interface Slot {
     value: unknown;
     initialized: boolean;
@@ -174,25 +208,25 @@ export function executeVm(program: VmProgram): unknown {
     args: unknown[],
     thisValue: unknown,
   ): unknown => {
-    const fn = program.functions[index];
+    const fn = functions[index];
     if (!fn) throw new Error(`Unknown VM function: ${index}`);
     let environment: Environment = { parent, slots: new Map() };
     const stack: unknown[] = [];
-    fn.parameters.forEach((name, i) => environment.slots.set(name, {
+    fn[0].forEach((name, i) => environment.slots.set(name, {
       value: args[i], initialized: true, constant: false,
     }));
-    if (!fn.arrow) {
+    if (!fn[2]) {
       environment.slots.set('arguments', { value: args, initialized: true, constant: false });
     }
 
     let pc = 0;
-    while (pc < fn.code.length) {
-      const instruction = fn.code[pc++];
+    while (pc < fn[1].length) {
+      const instruction = fn[1][pc++];
       if (!instruction) throw new Error('Missing VM instruction.');
       const [opcode, operand, extra] = instruction;
-      const op = program.instructions;
-      if (Object.hasOwn(program.globals, opcode)) {
-        const path = program.globals[opcode];
+      const op = program[0];
+      if (globals.has(opcode)) {
+        const path = globals.get(opcode);
         const name = path?.[0];
         if (!path || !name) throw new Error('Invalid global opcode.');
         let target = globalReference(name);
@@ -207,7 +241,7 @@ export function executeVm(program: VmProgram): unknown {
         case op.undefined: stack.push(undefined); break;
         case op.this: stack.push(thisValue); break;
         case op.typeofGlobal: {
-          const name = program.globals[Number(operand)]?.[0];
+          const name = globals.get(Number(operand))?.[0];
           if (!name) throw new Error('Invalid typeof global opcode.');
           stack.push(typeof Reflect.get(globalThis, name));
           break;
@@ -267,20 +301,20 @@ export function executeVm(program: VmProgram): unknown {
         case op.closure: {
           let closure = environment;
           const functionIndex = Number(operand);
-          const metadata = program.functions[functionIndex];
+          const metadata = functions[functionIndex];
           if (!metadata) throw new Error('Invalid closure function.');
-          const callable: (...values: unknown[]) => unknown = metadata.arrow
+          const callable: (...values: unknown[]) => unknown = metadata[2]
             ? (...values: unknown[]) => run(functionIndex, closure, values, thisValue)
             : function (this: unknown, ...values: unknown[]): unknown {
               return run(functionIndex, closure, values, this);
             };
-          if (metadata.name) {
+          if (metadata[3]) {
             closure = {
               parent: closure,
-              slots: new Map([[metadata.name, { value: callable, initialized: true, constant: true }]]),
+              slots: new Map([[metadata[3], { value: callable, initialized: true, constant: true }]]),
             };
           }
-          Object.defineProperty(callable, 'length', { value: metadata.parameters.length });
+          Object.defineProperty(callable, 'length', { value: metadata[0].length });
           stack.push(callable);
           break;
         }

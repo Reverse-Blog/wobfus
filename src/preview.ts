@@ -23,7 +23,9 @@ const form = document.querySelector<HTMLFormElement>("#obfuscator");
 const sourceContainer = document.querySelector<HTMLDivElement>("#source");
 const outputContainer = document.querySelector<HTMLDivElement>("#output");
 const status = document.querySelector<HTMLParagraphElement>("#status");
-const submitButton = document.querySelector<HTMLButtonElement>(".run-button");
+const submitButton = document.querySelector<HTMLButtonElement>("#obfuscate-button");
+const previewButton = document.querySelector<HTMLButtonElement>("#preview-button");
+const previewFrame = document.querySelector<HTMLIFrameElement>("#preview-frame");
 const sourceSize = document.querySelector<HTMLSpanElement>("#source-size");
 const outputSize = document.querySelector<HTMLSpanElement>("#output-size");
 const globalCallList = document.querySelector<HTMLUListElement>("#global-calls");
@@ -36,6 +38,8 @@ if (
   !outputContainer ||
   !status ||
   !submitButton ||
+  !previewButton ||
+  !previewFrame ||
   !sourceSize ||
   !outputSize ||
   !globalCallList ||
@@ -89,12 +93,59 @@ const renderGlobalCalls = (calls: ReturnType<typeof findGlobalCalls>) => {
 };
 
 const source = monaco.editor.create(sourceContainer, {
-  value: `function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
+  value: `const canvas = document.createElement("canvas");
+canvas.width = 1000;
+canvas.height = 560;
+const ctx = canvas.getContext("2d");
+const background = ctx.createLinearGradient(0, 0, 1000, 560);
+background.addColorStop(0, "#20232d");
+background.addColorStop(1, "#2c2835");
+ctx.fillStyle = background;
+ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-console.log(fibonacci(10));`,
+const shape = ctx.createLinearGradient(320, 130, 680, 410);
+shape.addColorStop(0, "#b9b0cb");
+shape.addColorStop(0.5, "#989dbb");
+shape.addColorStop(1, "#738f97");
+ctx.fillStyle = shape;
+ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
+ctx.shadowBlur = 35;
+ctx.shadowOffsetY = 18;
+ctx.beginPath();
+ctx.moveTo(500, 108);
+ctx.bezierCurveTo(610, 72, 735, 176, 686, 282);
+ctx.bezierCurveTo(756, 392, 582, 455, 500, 410);
+ctx.bezierCurveTo(388, 466, 265, 370, 314, 266);
+ctx.bezierCurveTo(254, 160, 400, 76, 500, 108);
+ctx.closePath();
+ctx.fill();
+ctx.shadowBlur = 0;
+ctx.shadowOffsetY = 0;
+
+ctx.fillStyle = "#d4bb87";
+ctx.beginPath();
+ctx.arc(500, 265, 72, 0, Math.PI * 2);
+ctx.fill();
+ctx.fillStyle = "#30333d";
+ctx.fillRect(435, 238, 130, 8);
+ctx.beginPath();
+ctx.roundRect(446, 239, 43, 30, 10);
+ctx.roundRect(511, 239, 43, 30, 10);
+ctx.fill();
+ctx.strokeStyle = "#efe8d8";
+ctx.lineWidth = 5;
+ctx.lineCap = "round";
+ctx.beginPath();
+ctx.arc(500, 278, 26, 0.2, Math.PI - 0.2);
+ctx.stroke();
+
+ctx.fillStyle = "#d5d2de";
+ctx.textAlign = "center";
+ctx.font = "500 18px system-ui, sans-serif";
+ctx.fillText("stay a little mysterious.", 500, 485);
+
+console.log("%c ", "display: inline-block; padding: 140px 250px; background: url('" + canvas.toDataURL() + "') center / contain no-repeat;");
+console.log("https://www.youtube.com/watch?v=dQw4w9WgXcQ");`,
   language: "javascript",
   theme: "vs-dark",
   ariaLabel: "Source code editor",
@@ -140,6 +191,94 @@ const sourceSizeSubscription = source.onDidChangeModelContent(updateSizes);
 const outputSizeSubscription = output.onDidChangeModelContent(updateSizes);
 updateSizes();
 
+const encodeBase64 = (value: string): string => {
+  const bytes = encoder.encode(value);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+};
+
+const previewMarkerOwner = "obfuscated-preview";
+const clearPreviewMarkers = () => {
+  const model = output.getModel();
+  if (model) monaco.editor.setModelMarkers(model, previewMarkerOwner, []);
+};
+
+const onPreviewMessage = (event: MessageEvent<unknown>) => {
+  if (
+    event.source !== previewFrame.contentWindow ||
+    typeof event.data !== "object" ||
+    event.data === null
+  ) {
+    return;
+  }
+
+  if (
+    "type" in event.data &&
+    event.data.type === "wobfus-preview-error" &&
+    "message" in event.data &&
+    typeof event.data.message === "string"
+  ) {
+    const line =
+      "line" in event.data && typeof event.data.line === "number" && Number.isInteger(event.data.line)
+        ? event.data.line
+        : undefined;
+    const column =
+      "column" in event.data &&
+      typeof event.data.column === "number" &&
+      Number.isInteger(event.data.column)
+        ? event.data.column
+        : undefined;
+    const location =
+      line === undefined
+        ? ""
+        : ` at line ${line}${column === undefined ? "" : `, column ${column}`}`;
+    status.textContent = `Preview error${location}: ${event.data.message}`;
+
+    const model = output.getModel();
+    if (model && line !== undefined && line >= 1 && line <= model.getLineCount()) {
+      const markerColumn =
+        column === undefined
+          ? 1
+          : Math.min(Math.max(1, column), model.getLineMaxColumn(line));
+      const marker = {
+        startLineNumber: line,
+        startColumn: markerColumn,
+        endLineNumber: line,
+        endColumn: Math.min(markerColumn + 1, model.getLineMaxColumn(line)),
+        message: event.data.message,
+        severity: monaco.MarkerSeverity.Error,
+      };
+      monaco.editor.setModelMarkers(model, previewMarkerOwner, [marker]);
+      output.revealLineInCenter(line);
+    }
+  }
+};
+window.addEventListener("message", onPreviewMessage);
+
+previewButton.addEventListener("click", () => {
+  const code = output.getValue();
+  if (!code.trim()) {
+    status.textContent = "Obfuscate some code before running the preview.";
+    return;
+  }
+
+  clearPreviewMarkers();
+  const encodedCode = encodeBase64(code);
+  previewFrame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;min-height:100%;background:#080b13}body{overflow:auto}</style></head><body><script>
+function reportError(message,line,column){parent.postMessage({type:"wobfus-preview-error",message:String(message),line:line,column:column},"*")}
+window.onerror=function(message,source,line,column){reportError(message,line,column)};
+window.onunhandledrejection=function(event){var stack=event.reason&&event.reason.stack;var match=typeof stack==="string"&&stack.match(/:(\\d+):(\\d+)(?:\\)?(?:\\n|$))/);reportError(event.reason,match?Number(match[1]):undefined,match?Number(match[2]):undefined)};
+var bytes=Uint8Array.from(atob("${encodedCode}"),function(character){return character.charCodeAt(0)});
+var script=document.createElement("script");
+script.textContent=new TextDecoder().decode(bytes);
+document.body.appendChild(script);
+<\/script></body></html>`;
+  status.textContent = "Running obfuscated output; see the browser console for the canvas.";
+});
+
 async function minifyCode(code: string): Promise<string> {
   const response = await fetch("/__wobfus/minify", {
     method: "POST",
@@ -170,8 +309,11 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const sourceCode = source.getValue();
+  clearPreviewMarkers();
   if (!sourceCode.trim()) {
     output.setValue("");
+    previewButton.disabled = true;
+    previewFrame.srcdoc = "";
     renderGlobalCalls([]);
     renderOpcodes([]);
     status.textContent = "Enter some JavaScript code first.";
@@ -179,6 +321,8 @@ form.addEventListener("submit", async (event) => {
   }
 
   submitButton.disabled = true;
+  previewButton.disabled = true;
+  previewFrame.srcdoc = "";
   status.textContent = "Formatting, minifying, and obfuscating code...";
 
   try {
@@ -205,11 +349,14 @@ form.addEventListener("submit", async (event) => {
     ]);
     source.pushUndoStop();
     output.setValue(obfuscatedOutput);
+    previewButton.disabled = false;
     renderGlobalCalls(findGlobalCalls(formattedSource));
     renderOpcodes(result.opcodes);
     status.textContent = "Done. Code was minified before and after VM obfuscation, then formatted for display.";
   } catch (error) {
     output.setValue("");
+    previewButton.disabled = true;
+    previewFrame.srcdoc = "";
     renderGlobalCalls([]);
     renderOpcodes([]);
     console.error("Could not format or obfuscate code.", error);
@@ -226,5 +373,6 @@ if (import.meta.hot) {
     outputSizeSubscription.dispose();
     source.dispose();
     output.dispose();
+    window.removeEventListener("message", onPreviewMessage);
   });
 }

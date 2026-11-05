@@ -86,6 +86,25 @@ test("serialized output omits instruction names and the symbolic dispatch table"
   assert.deepEqual(output, [2]);
 });
 
+test("packs VM metadata and encodes global and property names", () => {
+  const generated = serializeVm(compileVm(`
+    const secretKey = "hidden value";
+    const box = { recognizableProperty: secretKey };
+    console.log(box.recognizableProperty);
+  `));
+  for (const text of [
+    "globals", "functions", "parameters", "recognizableProperty",
+    "hidden value", "console", "log",
+  ]) {
+    assert.ok(!generated.includes(text), `Leaked packed metadata: ${text}`);
+  }
+  const output = [];
+  runInNewContext(generated, { console: { log: (value) => output.push(value) } }, {
+    contextCodeGeneration: { strings: false, wasm: false },
+  });
+  assert.deepEqual(output, ["hidden value"]);
+});
+
 test("supports constructors, native method receivers, and computed keys", () => {
   assert.deepEqual(execute(`
     const cache = new WeakMap();
@@ -142,6 +161,11 @@ test("preserves short circuiting, coercion, bigint updates, and object propertie
     const object = { ["key"]: "value", n };
     console.log(n, v, "a" + 1, before, big, object.key, typeof object);
   `), [[0, "fallback", "a1", 1n, 2n, "value", "object"]]);
+});
+
+test("supports template literals with interpolated expressions and escapes", () => {
+  const source = "let order = 0; const result = `value=${++order}, escaped=\\n, object=${{ value: 7 }}`; console.log(result, order, `plain`);";
+  assert.deepEqual(execute(source), [["value=1, escaped=\n, object=[object Object]", 1, "plain"]]);
 });
 
 test("captures call targets before evaluating arguments", () => {

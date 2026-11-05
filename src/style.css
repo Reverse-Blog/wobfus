@@ -160,7 +160,6 @@ button {
 }
 
 .run-button {
-  grid-column: 1 / -1;
   display: flex;
   min-height: 48px;
   align-items: center;
@@ -178,7 +177,17 @@ button {
     transform 150ms ease;
 }
 
-.run-button:hover {
+.run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.preview-button {
+  background: #23312a;
+  color: #b7f36b;
+}
+
+.run-button:hover:not(:disabled) {
   transform: translateY(-1px);
   background: #32333b;
 }

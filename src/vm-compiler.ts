@@ -128,7 +128,21 @@ export function compileVm(source: string): VmProgram {
       else if (t.isStringLiteral(node) || t.isBooleanLiteral(node)) emit('constant', node.value);
       else if (t.isNullLiteral(node)) emit('constant', null);
       else if (t.isThisExpression(node)) emit('this');
-      else if (t.isBinaryExpression(node)) {
+      else if (t.isTemplateLiteral(node)) {
+        const first = node.quasis[0]?.value.cooked;
+        if (first === undefined || first === null) return fail(node, 'Invalid template literal escape');
+        emit('constant', first);
+        node.expressions.forEach((part, index) => {
+          const following = node.quasis[index + 1]?.value.cooked;
+          if (following === undefined || following === null) {
+            return fail(node, 'Invalid template literal escape');
+          }
+          expression(part);
+          emit('binary', '+');
+          emit('constant', following);
+          emit('binary', '+');
+        });
+      } else if (t.isBinaryExpression(node)) {
         expression(node.left);
         expression(node.right);
         emit('binary', node.operator);
