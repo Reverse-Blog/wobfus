@@ -1,0 +1,226 @@
+@import "../node_modules/monaco-editor/min/vs/editor/editor.main.css";
+
+:root {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #f0f0f5;
+  background: #0c0d10;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+
+  --muted: #898b98;
+  --panel: #131419;
+  --accent: #b7f36b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(ellipse at 50% 0, rgb(183 243 107 / 7%), transparent 34rem),
+    #0c0d10;
+}
+
+button {
+  font: inherit;
+}
+
+.app {
+  width: min(100% - 40px, 1440px);
+  margin: 0 auto;
+  padding: 28px 0 32px;
+}
+
+.header,
+.brand,
+.field-heading {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-bottom: 20px;
+}
+
+.brand {
+  margin: 0;
+  color: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.field-heading,
+.file-size,
+.status,
+.footer {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.editor {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.debug-panel {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border: 1px solid #25262d;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.debug-count {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.debug-list {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.debug-list li {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 16px;
+  background: #17181e;
+  color: #d7d8df;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.debug-list code {
+  color: var(--accent);
+  flex: 1;
+  min-width: 0;
+}
+
+.debug-list .debug-empty,
+.debug-type,
+.debug-location {
+  color: var(--muted);
+}
+
+.field-heading {
+  min-height: 34px;
+  padding: 0 16px;
+  color: #c9cad2;
+  font-size: 11px;
+}
+
+.code-editor {
+  width: 100%;
+  height: 480px;
+}
+
+.file-size {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.monaco-editor,
+.monaco-editor .margin,
+.monaco-editor-background {
+  background-color: var(--panel) !important;
+}
+
+.run-button {
+  grid-column: 1 / -1;
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: #26272d;
+  color: #c9cad2;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  transition:
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.run-button:hover {
+  transform: translateY(-1px);
+  background: #32333b;
+}
+
+.run-button:focus-visible {
+  outline: 2px solid #f0f0f5;
+  outline-offset: 3px;
+}
+
+.status {
+  grid-column: 1 / -1;
+  min-height: 16px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.footer {
+  margin-top: 40px;
+  color: #666873;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .app {
+    width: calc(100% - 28px);
+    padding-top: 18px;
+  }
+
+  .code-editor {
+    height: 260px;
+  }
+
+  .result-editor .code-editor {
+    height: 380px;
+  }
+}
