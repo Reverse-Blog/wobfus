@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import { compileVm } from "../src/vm-compiler.ts";
 import { serializeVm } from "../src/vm-runtime.ts";
+import { renameBig5Identifiers } from "../src/big5.ts";
 
 function execute(source) {
   const output = [];
@@ -114,6 +115,37 @@ test("supports constructors, native method receivers, and computed keys", () => 
     items.push(cache.get(key));
     console.log(items[0], cache instanceof WeakMap, Math["max"](3, 5));
   `), [[42, true, 5]]);
+});
+
+test("preserves Proxy traps, getters, and dynamic method receivers", () => {
+  assert.deepEqual(execute(`
+    let reads = 0;
+    const target = { value: 7, method: function (amount) { return this.value + amount; } };
+    Object.defineProperty(target, "counted", {
+      get: function () { reads++; return reads; }
+    });
+    const proxy = new Proxy(target, {
+      get: function (object, key, receiver) {
+        return Reflect.get(object, key, receiver);
+      }
+    });
+    const key = "meth" + "od";
+    console.log(proxy.counted, proxy.counted, proxy[key](5), reads);
+  `), [[1, 2, 12, 2]]);
+});
+
+test("preserves shared TypedArray memory, byte order, and floating-point edge cases", () => {
+  assert.deepEqual(execute(`
+    const buffer = new ArrayBuffer(8);
+    const floats = new Float64Array(buffer);
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+    view.setFloat64(0, Math.PI, true);
+    console.log(view.getFloat64(0, true), bytes[0], bytes[7]);
+    floats[0] = -0;
+    console.log(Object.is(floats[0], -0), 1 / floats[0]);
+    console.log(0 / 0 !== 0 / 0, (2147483647 + 1) | 0);
+  `), [[Math.PI, 24, 64], [true, -Infinity], [true, -2147483648]]);
 });
 
 test("supports closures, recursion, function hoisting, and block scopes", () => {
@@ -268,7 +300,7 @@ test("final formatted output keeps Fibonacci names removed after both minificati
   });
   assert.equal(minified.errors.length, 0);
   assert.ok(minified.code.length < generated.length);
-  const formatted = await format(minified.code, { parser: "babel" });
+  const formatted = await format(renameBig5Identifiers(minified.code), { parser: "babel" });
   assert.doesNotMatch(formatted, /fibonacci/);
   const output = [];
   runInNewContext(formatted, { console: { log: (value) => output.push(value) } }, {

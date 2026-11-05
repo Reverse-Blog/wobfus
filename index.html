@@ -53,6 +53,19 @@
           hidden
         ></iframe>
         <section class="debug-panel" aria-labelledby="debug-label">
+          <div class="field-heading" id="global-api-label">
+            Global browser API map
+            <span class="debug-count" id="global-api-count">0</span>
+          </div>
+          <label class="global-api-filter">
+            <span class="visually-hidden">Filter global APIs</span>
+            <input id="global-api-filter" type="search" placeholder="Filter global names..." />
+          </label>
+          <ul
+            class="debug-list global-api-list"
+            id="global-api-list"
+            aria-labelledby="global-api-label"
+          ></ul>
           <div class="field-heading" id="debug-label">
             Detected global references
             <span class="debug-count" id="global-call-count">0</span>

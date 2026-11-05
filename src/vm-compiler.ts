@@ -1,6 +1,7 @@
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import * as t from '@babel/types';
+import { big5Identifier } from './big5.ts';
 import type { Instruction, VmFunction, VmProgram } from './vm-runtime.js';
 
 const instructionNames = [
@@ -30,7 +31,7 @@ export function compileVm(source: string): VmProgram {
     if (name === 'arguments') return name;
     let token = localNames.get(name);
     if (token === undefined) {
-      token = `$${localNames.size.toString(36)}`;
+      token = big5Identifier(localNames.size);
       localNames.set(name, token);
     }
     return token;

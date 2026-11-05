@@ -13,12 +13,21 @@ export interface VmProgram {
 
 type PackedFunction = [string[], Instruction[], boolean, string | null];
 type PackedProgram = [number[], Array<[number, string[]]>, PackedFunction[]];
+type RuntimeProgram = [VmProgram['instructions'], PackedProgram[1], PackedFunction[]];
 
 export function serializeVm(program: VmProgram): string {
-  const ast = parse(`(${executeVm.toString()})`);
+  const payload: PackedProgram = [
+    Object.values(program.instructions),
+    Object.entries(program.globals).map(([opcode, path]) => [Number(opcode), path]),
+    program.functions.map(({ parameters, code, arrow, name }) => [parameters, code, arrow, name]),
+  ];
+  const ast = parse(`(()=>{"use strict";return (${executeVm.toString()})((${decodeVmPayload.toString()})(null,null,null))})()`);
   let dispatchBindingFound = false;
   const instructionNames = Object.keys(program.instructions);
   traverse(ast, {
+    ClassProperty(path) {
+      if (path.node.value == null) path.remove();
+    },
     VariableDeclarator(path) {
       if (
         t.isIdentifier(path.node.id) &&
@@ -47,40 +56,103 @@ export function serializeVm(program: VmProgram): string {
     },
   });
   if (!dispatchBindingFound) throw new Error('Runtime instruction dispatch was not found.');
-  const runtime = generate(ast, { compact: true, comments: false }).code;
-  const expression = runtime.replace(/;$/, '');
   const key = crypto.getRandomValues(new Uint32Array(1))[0]! & 0xffff;
-  const packStrings = (value: unknown): unknown => {
-    if (typeof value === 'string') {
-      const codes: string[] = [];
-      for (let index = 0; index < value.length; index++) {
-        codes.push((value.charCodeAt(index) ^ key).toString(36));
+  let scope: Scope | undefined;
+  traverse(ast, {
+    Program(path) {
+      scope = path.scope;
+      path.stop();
+    },
+  });
+  if (!scope) throw new Error('Missing generated runtime scope.');
+  const decoder = scope.generateUidIdentifier('decode');
+  const alphabet = scope.generateUidIdentifier('alphabet');
+  const stringKey = scope.generateUidIdentifier('key');
+  const decodedString = (value: string) => t.callExpression(t.cloneNode(decoder), [
+    t.stringLiteral(encodeBig5(value, key)), t.cloneNode(alphabet), t.cloneNode(stringKey),
+  ]);
+  traverse(ast, {
+    MemberExpression: {
+      exit(path) {
+        if (!path.node.computed && t.isIdentifier(path.node.property)) {
+          path.replaceWith(t.memberExpression(
+            path.node.object, decodedString(path.node.property.name), true,
+          ));
+          path.skip();
+        }
+      },
+    },
+    StringLiteral(path) {
+      if (path.parentPath.isObjectProperty() && path.key === 'key') {
+        path.parentPath.node.computed = true;
       }
-      return `~${codes.join('.')}`;
-    }
-    if (Array.isArray(value)) return value.map(packStrings);
-    return value;
-  };
-  const payload: PackedProgram = [
-    Object.values(program.instructions),
-    Object.entries(program.globals).map(([opcode, path]) => [Number(opcode), path]),
-    program.functions.map(({ parameters, code, arrow, name }) => [parameters, code, arrow, name]),
+      path.replaceWith(decodedString(path.node.value));
+      path.skip();
+    },
+    TemplateLiteral: {
+      exit(path) {
+        const expressions: t.Expression[] = [];
+        path.node.quasis.forEach((quasi, index) => {
+          if (quasi.value.cooked == null) throw new Error('Invalid runtime template literal.');
+          expressions.push(decodedString(quasi.value.cooked));
+          const expression = path.node.expressions[index];
+          if (expression) {
+            t.assertExpression(expression);
+            expressions.push(expression);
+          }
+        });
+        path.replaceWith(t.templateLiteral(
+          Array.from({ length: expressions.length + 1 }, (_, index) =>
+            t.templateElement({ raw: '', cooked: '' }, index === expressions.length)),
+          expressions,
+        ));
+        path.skip();
+      },
+    },
+  });
+  const statement = ast.program.body[0];
+  t.assertExpressionStatement(statement);
+  t.assertCallExpression(statement.expression);
+  t.assertArrowFunctionExpression(statement.expression.callee);
+  t.assertBlockStatement(statement.expression.callee.body);
+  const returnStatement = statement.expression.callee.body.body[0];
+  t.assertReturnStatement(returnStatement);
+  t.assertCallExpression(returnStatement.argument);
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0]!;
+  const payloadCall = returnStatement.argument.arguments[0];
+  t.assertCallExpression(payloadCall);
+  payloadCall.arguments = [
+    t.stringLiteral(encodeVmPayload(payload, seed)),
+    t.cloneNode(alphabet),
+    t.numericLiteral(seed),
   ];
-  return `(()=>{"use strict";return ${expression}(${JSON.stringify(packStrings(payload))},${key})})()`;
+  statement.expression.callee.body.body.unshift(
+    t.variableDeclaration('const', [
+      t.variableDeclarator(decoder, parseExpression(`(${decodeBig5.toString()})`)),
+      t.variableDeclarator(alphabet, t.stringLiteral(
+        Array.from(big5Alphabet, (_, index) => big5Identifier(index)).join(''),
+      )),
+      t.variableDeclarator(stringKey, t.numericLiteral(key)),
+    ]),
+  );
+  return renameBig5Identifiers(generate(ast, {
+    compact: true, comments: false, jsescOption: { minimal: true },
+  }).code);
 }
 
-export function executeVm(encodedProgram: PackedProgram, key: number): unknown {
-  const unpackStrings = (value: unknown): unknown => {
-    if (typeof value === 'string') {
-      if (!value.startsWith('~')) throw new Error('Invalid packed VM string.');
-      const codes = value.slice(1);
-      if (codes === '') return '';
-      return codes.split('.').map((code) => String.fromCharCode(parseInt(code, 36) ^ key)).join('');
+function decodeBig5(value: string, alphabet: string, key: number): string {
+  let decoded = String();
+  for (let index = 0; index < value.length; index += 8) {
+    let code = 0;
+    for (let offset = 0; offset < 4; offset++) {
+      code = (code << 4) | (alphabet.indexOf(value[index + offset * 2]!) / 2);
     }
-    if (Array.isArray(value)) return value.map(unpackStrings);
-    return value;
-  };
-  const program = unpackStrings(encodedProgram) as PackedProgram;
+    decoded += String.fromCharCode(code ^ key);
+  }
+  return decoded;
+}
+
+export function executeVm(program: RuntimeProgram): unknown {
   const globals = new Map(program[1]);
   const functions = program[2];
   interface Slot {
@@ -368,7 +440,9 @@ export function executeVm(encodedProgram: PackedProgram, key: number): unknown {
   };
   return run(0, undefined, [], globalThis);
 }
-import { parse } from '@babel/parser';
-import traverse from '@babel/traverse';
+import { parse, parseExpression } from '@babel/parser';
+import traverse, { type Scope } from '@babel/traverse';
 import generate from '@babel/generator';
 import * as t from '@babel/types';
+import { big5Alphabet, big5Identifier, encodeBig5, renameBig5Identifiers } from './big5.ts';
+import { decodeVmPayload, encodeVmPayload } from './vm-payload.ts';

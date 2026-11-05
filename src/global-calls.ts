@@ -9,6 +9,11 @@ export interface GlobalCall {
   column: number;
 }
 
+export interface GlobalApi {
+  name: string;
+  type: string;
+}
+
 function referenceDescriptor(node: t.Expression): PropertyDescriptor | undefined {
   if (t.isIdentifier(node)) {
     return propertyDescriptor(globalThis, node.name);
@@ -48,8 +53,7 @@ function propertyDescriptor(value: unknown, key: string): PropertyDescriptor | u
   return undefined;
 }
 
-function referenceType(node: t.Expression): string {
-  const descriptor = referenceDescriptor(node);
+function descriptorType(descriptor: PropertyDescriptor | undefined): string {
   if (!descriptor) {
     return 'unknown';
   }
@@ -70,6 +74,28 @@ function referenceType(node: t.Expression): string {
     return 'function';
   }
   return typeof value;
+}
+
+function referenceType(node: t.Expression): string {
+  return descriptorType(referenceDescriptor(node));
+}
+
+export function listGlobalApis(root: object = globalThis): GlobalApi[] {
+  const names = new Set<string>();
+  let object: object | null = root;
+  while (object) {
+    for (const name of Object.getOwnPropertyNames(object)) {
+      names.add(name);
+    }
+    object = Object.getPrototypeOf(object);
+  }
+
+  return [...names]
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+    .map((name) => ({
+      name,
+      type: descriptorType(propertyDescriptor(root, name)),
+    }));
 }
 
 export function findGlobalCalls(source: string): GlobalCall[] {

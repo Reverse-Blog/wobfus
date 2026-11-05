@@ -6,8 +6,9 @@ import * as babelPlugin from "prettier/plugins/babel";
 import * as estreePlugin from "prettier/plugins/estree";
 import { obfuscateWithMetadata } from "./obfuscate.js";
 import { formatSize } from "./format-size.js";
-import { findGlobalCalls } from "./global-calls.js";
+import { findGlobalCalls, listGlobalApis } from "./global-calls.js";
 import { compileVm } from "./vm-compiler.js";
+import { renameBig5Identifiers } from "./big5.ts";
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -30,6 +31,9 @@ const sourceSize = document.querySelector<HTMLSpanElement>("#source-size");
 const outputSize = document.querySelector<HTMLSpanElement>("#output-size");
 const globalCallList = document.querySelector<HTMLUListElement>("#global-calls");
 const globalCallCount = document.querySelector<HTMLSpanElement>("#global-call-count");
+const globalApiList = document.querySelector<HTMLUListElement>("#global-api-list");
+const globalApiCount = document.querySelector<HTMLSpanElement>("#global-api-count");
+const globalApiFilter = document.querySelector<HTMLInputElement>("#global-api-filter");
 const opcodeList = document.querySelector<HTMLUListElement>("#opcode-list");
 
 if (
@@ -44,6 +48,9 @@ if (
   !outputSize ||
   !globalCallList ||
   !globalCallCount ||
+  !globalApiList ||
+  !globalApiCount ||
+  !globalApiFilter ||
   !opcodeList
 ) {
   throw new Error("Could not initialize the obfuscator page.");
@@ -91,6 +98,39 @@ const renderGlobalCalls = (calls: ReturnType<typeof findGlobalCalls>) => {
     globalCallList.append(item);
   }
 };
+
+const globalApis = listGlobalApis();
+globalApiCount.textContent = String(globalApis.length);
+
+const renderGlobalApiMap = (query = "") => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = globalApis.filter(({ name }) =>
+    name.toLowerCase().includes(normalizedQuery),
+  );
+  globalApiList.replaceChildren();
+
+  if (matches.length === 0) {
+    const emptyMessage = document.createElement("li");
+    emptyMessage.className = "debug-empty";
+    emptyMessage.textContent = "No matching global APIs.";
+    globalApiList.append(emptyMessage);
+    return;
+  }
+
+  for (const api of matches) {
+    const item = document.createElement("li");
+    const name = document.createElement("code");
+    const type = document.createElement("span");
+    name.textContent = api.name;
+    type.className = "debug-type";
+    type.textContent = api.type;
+    item.append(name, type);
+    globalApiList.append(item);
+  }
+};
+
+renderGlobalApiMap();
+globalApiFilter.addEventListener("input", () => renderGlobalApiMap(globalApiFilter.value));
 
 const source = monaco.editor.create(sourceContainer, {
   value: `const canvas = document.createElement("canvas");
@@ -341,7 +381,7 @@ form.addEventListener("submit", async (event) => {
     const minifiedSource = await minifyCode(formattedSource);
     const result = obfuscateWithMetadata(minifiedSource);
     const minifiedOutput = await minifyCode(result.code);
-    const obfuscatedOutput = await format(minifiedOutput, options);
+    const obfuscatedOutput = await format(renameBig5Identifiers(minifiedOutput), options);
 
     source.pushUndoStop();
     source.executeEdits("format", [

@@ -108,6 +108,38 @@ button {
   list-style: none;
 }
 
+.global-api-filter {
+  display: block;
+  padding: 0 16px 10px;
+}
+
+.global-api-filter input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #30313a;
+  border-radius: 5px;
+  background: #17181e;
+  color: #d7d8df;
+  font: 11px ui-monospace, SFMono-Regular, monospace;
+}
+
+.global-api-list {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .debug-list li {
   display: flex;
   min-height: 34px;
