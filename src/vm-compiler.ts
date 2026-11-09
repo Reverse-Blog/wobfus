@@ -2,6 +2,7 @@ import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import type { Instruction, VmFunction, VmProgram } from './vm-runtime.js';
+import { flattenVmControlFlow } from './vm-control-flow.js';
 
 const instructionNames = [
   'constant', 'number', 'bigint', 'undefined', 'this', 'local', 'read', 'member',
@@ -347,5 +348,6 @@ export function compileVm(source: string): VmProgram {
     return index;
   };
   compileFunction(ast.program.body, [], false);
+  for (const fn of functions) fn.code = flattenVmControlFlow(fn.code, instructions);
   return { instructions, globals, functions };
 }

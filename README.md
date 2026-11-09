@@ -22,6 +22,7 @@ The demo keeps a simple virtual machine while prioritizing smaller output:
 - Small, sequential instruction and API opcodes.
 - One invocation opcode per statically known global API path, reused across calls.
 - Plain bytecode with readable source binding names, strings, and API paths.
+- Bytecode control-flow flattening enabled by default for every VM function.
 - A self-contained runtime, without encoded payloads or Unicode name masking.
 - Minified playground output, then formatted for readability.
 
@@ -36,6 +37,20 @@ replacements without eagerly reading browser APIs. Local functions, instance
 methods, and dynamically computed API paths still use generic call instructions.
 API paths remain visible in the registry; the original JavaScript is not
 stored or evaluated as a source string.
+
+## Bytecode control flow
+
+After compilation, the compiler extracts basic blocks at branch targets and
+after branches or returns. It also splits long linear sections into chunks of
+at most 12 original instructions. Blocks are permuted reproducibly, implicit
+fallthroughs become explicit jumps, and all jump targets are relocated.
+An entry jump selects the original first block; the existing VM is unchanged.
+
+Instructions within each block retain their original order. Jumps preserve the
+stack and lexical environment, including `enter`, `leave`, and `cloneScope`.
+This adds at most one fallthrough jump per block plus one entry jump per
+function, increasing bytecode size and execution overhead without another VM.
+The execution graph can still be recovered, especially by dynamic tracing.
 
 **This is an experimental demo, not a security feature.** Source names and
 literals are intentionally visible; the output can be inspected and

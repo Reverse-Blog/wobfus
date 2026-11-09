@@ -411,7 +411,7 @@ form.addEventListener("submit", async (event) => {
     previewButton.disabled = false;
     renderGlobalCalls(findGlobalCalls(formattedSource));
     renderOpcodes(result.opcodes);
-    status.textContent = "Done. Plain VM bytecode and runtime were minified without extra encoding, then formatted for display.";
+    status.textContent = "Done. VM control flow was flattened, then the output was minified and formatted for display.";
   } catch (error) {
     output.setValue("");
     previewButton.disabled = true;
