@@ -15,6 +15,18 @@ its behavior. The browser playground lets you edit, obfuscate, and run the
 result.
 The playground uses a GitHub-inspired dark theme and the Wobfus trident logo.
 
+## Playground deployment
+
+Run `npm run dev` for local development or `npm run build:site` to produce the
+static playground in `site-dist/`. `npm run build` remains the separate npm
+package build. The playground minifies generated code in the browser and does
+not require a server-side minification endpoint.
+
+The GitHub Actions workflow builds and deploys the playground on pushes to
+`main`. Set the repository's Pages source to **GitHub Actions** and configure
+the custom domain in Pages settings. The workflow includes the `CNAME` file in
+the deployed artifact.
+
 ## Lightweight VM output
 
 The demo keeps a simple virtual machine while prioritizing smaller output:

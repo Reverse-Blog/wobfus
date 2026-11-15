@@ -6,6 +6,7 @@ import * as babelPlugin from "prettier/plugins/babel";
 import * as estreePlugin from "prettier/plugins/estree";
 import { obfuscate } from "./obfuscate.js";
 import { formatSize } from "./format-size.js";
+import { minifyCode } from "./minify.js";
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -247,32 +248,6 @@ script.textContent=new TextDecoder().decode(bytes);
 document.body.appendChild(script);
 <\/script></body></html>`;
 });
-
-async function minifyCode(code: string): Promise<string> {
-  const response = await fetch("/__wobfus/minify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
-  });
-  const result: unknown = await response.json();
-  if (
-    !response.ok ||
-    typeof result !== "object" ||
-    result === null ||
-    !("code" in result) ||
-    typeof result.code !== "string"
-  ) {
-    const message =
-      typeof result === "object" &&
-      result !== null &&
-      "error" in result &&
-      typeof result.error === "string"
-        ? result.error
-        : `Minifier request failed with status ${response.status}.`;
-    throw new Error(message);
-  }
-  return result.code;
-}
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

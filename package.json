@@ -16,8 +16,9 @@
   ],
   "scripts": {
     "dev": "vite",
-    "preview": "vite preview",
+    "preview": "vite preview --config vite.app.config.ts",
     "build": "vite build && tsc --emitDeclarationOnly",
+    "build:site": "vite build --config vite.app.config.ts",
     "check": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "test": "node --test",
     "prepare": "npm run build",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "monaco-editor": "^0.57.0",
     "prettier": "^3.9.10",
+    "terser": "^5.43.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
   },
