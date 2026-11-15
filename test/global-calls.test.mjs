@@ -1,28 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findGlobalCalls, listGlobalApis } from "../src/global-calls.ts";
-
-test("lists global properties and inherited names without invoking accessors", () => {
-  let getterCalls = 0;
-  const prototype = Object.assign(Object.create(null), { inheritedApi() {} });
-  const root = Object.create(prototype);
-  Object.defineProperties(root, {
-    Example: { value: class Example {} },
-    lazy: {
-      get() {
-        getterCalls++;
-        throw new Error("Must not invoke getters.");
-      },
-    },
-  });
-
-  assert.deepEqual(listGlobalApis(root), [
-    { name: "Example", type: "class" },
-    { name: "inheritedApi", type: "function" },
-    { name: "lazy", type: "accessor" },
-  ]);
-  assert.equal(getterCalls, 0);
-});
+import { findGlobalCalls } from "../src/global-calls.ts";
 
 test("finds direct and member calls rooted in globals with source locations", () => {
   const calls = findGlobalCalls("fetch('/api');\nconsole.log('ready');");

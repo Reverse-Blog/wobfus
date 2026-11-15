@@ -41,6 +41,13 @@
           ></div>
           <p class="file-size">Output size: <span id="output-size">0 bytes</span></p>
         </div>
+        <iframe
+          id="preview-frame"
+          title="Obfuscated code runner"
+          sandbox="allow-scripts"
+          referrerpolicy="no-referrer"
+          hidden
+        ></iframe>
         <button class="run-button" id="obfuscate-button" type="submit">
           <span>Obfuscate code</span>
           <span aria-hidden="true">→</span>
@@ -49,47 +56,7 @@
           <span>Run obfuscated code</span>
           <span aria-hidden="true">▶</span>
         </button>
-        <iframe
-          id="preview-frame"
-          title="Obfuscated code runner"
-          sandbox="allow-scripts"
-          referrerpolicy="no-referrer"
-          hidden
-        ></iframe>
-        <section class="debug-panel" aria-labelledby="debug-label">
-          <div class="field-heading" id="global-api-label">
-            Global browser API map
-            <span class="debug-count" id="global-api-count">0</span>
-          </div>
-          <label class="global-api-filter">
-            <span class="visually-hidden">Filter global APIs</span>
-            <input id="global-api-filter" type="search" placeholder="Filter global names..." />
-          </label>
-          <ul
-            class="debug-list global-api-list"
-            id="global-api-list"
-            aria-labelledby="global-api-label"
-          ></ul>
-          <div class="field-heading" id="debug-label">
-            Detected global references
-            <span class="debug-count" id="global-call-count">0</span>
-          </div>
-          <ul class="debug-list" id="global-calls" aria-live="polite">
-            <li class="debug-empty">Run the demo to inspect global references.</li>
-          </ul>
-          <details>
-            <summary class="field-heading">Generated instruction and API opcodes</summary>
-            <ul class="debug-list" id="opcode-list"></ul>
-          </details>
-        </section>
-        <p class="status" id="status" role="status" aria-live="polite">
-          Code is processed locally and never sent anywhere.
-        </p>
       </form>
-
-      <footer class="footer">
-        Pseudo-obfuscation does not protect code from analysis.
-      </footer>
     </main>
     <script type="module" src="/src/preview.ts"></script>
   </body>

@@ -71,9 +71,7 @@ button {
 }
 
 .field-heading,
-.file-size,
-.status,
-.footer {
+.file-size {
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -96,85 +94,6 @@ button {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
-}
-
-.debug-panel {
-  grid-column: 1 / -1;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-}
-
-.debug-count {
-  margin-left: auto;
-  color: var(--muted);
-}
-
-.debug-list {
-  display: grid;
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.global-api-filter {
-  display: block;
-  padding: 0 16px 10px;
-}
-
-.global-api-filter input {
-  width: 100%;
-  min-height: 34px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  color: #e6edf3;
-  font: 11px ui-monospace, SFMono-Regular, monospace;
-}
-
-.global-api-list {
-  max-height: 320px;
-  overflow: auto;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  clip-path: inset(50%);
-}
-
-.debug-list li {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 6px 16px;
-  background: var(--surface);
-  color: #e6edf3;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
-
-.debug-list code {
-  color: var(--accent);
-  flex: 1;
-  min-width: 0;
-}
-
-.debug-list .debug-empty,
-.debug-type,
-.debug-location {
-  color: var(--muted);
 }
 
 .field-heading {
@@ -247,29 +166,9 @@ summary.field-heading {
   border-color: #8b949e;
 }
 
-.run-button:focus-visible,
-.global-api-filter input:focus-visible,
-summary.field-heading:focus-visible {
+.run-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-}
-
-.status {
-  grid-column: 1 / -1;
-  min-height: 16px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
-
-.footer {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 10px;
-  text-align: center;
 }
 
 @media (max-width: 760px) {

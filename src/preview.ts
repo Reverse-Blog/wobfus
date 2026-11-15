@@ -4,9 +4,8 @@ import TypeScriptWorker from "../node_modules/monaco-editor/esm/vs/language/type
 import { format } from "prettier/standalone";
 import * as babelPlugin from "prettier/plugins/babel";
 import * as estreePlugin from "prettier/plugins/estree";
-import { obfuscateWithMetadata } from "./obfuscate.js";
+import { obfuscate } from "./obfuscate.js";
 import { formatSize } from "./format-size.js";
-import { findGlobalCalls, listGlobalApis } from "./global-calls.js";
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -44,114 +43,24 @@ monaco.editor.defineTheme("wobfus-dark", {
 const form = document.querySelector<HTMLFormElement>("#obfuscator");
 const sourceContainer = document.querySelector<HTMLDivElement>("#source");
 const outputContainer = document.querySelector<HTMLDivElement>("#output");
-const status = document.querySelector<HTMLParagraphElement>("#status");
 const submitButton = document.querySelector<HTMLButtonElement>("#obfuscate-button");
 const previewButton = document.querySelector<HTMLButtonElement>("#preview-button");
 const previewFrame = document.querySelector<HTMLIFrameElement>("#preview-frame");
 const sourceSize = document.querySelector<HTMLSpanElement>("#source-size");
 const outputSize = document.querySelector<HTMLSpanElement>("#output-size");
-const globalCallList = document.querySelector<HTMLUListElement>("#global-calls");
-const globalCallCount = document.querySelector<HTMLSpanElement>("#global-call-count");
-const globalApiList = document.querySelector<HTMLUListElement>("#global-api-list");
-const globalApiCount = document.querySelector<HTMLSpanElement>("#global-api-count");
-const globalApiFilter = document.querySelector<HTMLInputElement>("#global-api-filter");
-const opcodeList = document.querySelector<HTMLUListElement>("#opcode-list");
 
 if (
   !form ||
   !sourceContainer ||
   !outputContainer ||
-  !status ||
   !submitButton ||
   !previewButton ||
   !previewFrame ||
   !sourceSize ||
-  !outputSize ||
-  !globalCallList ||
-  !globalCallCount ||
-  !globalApiList ||
-  !globalApiCount ||
-  !globalApiFilter ||
-  !opcodeList
+  !outputSize
 ) {
   throw new Error("Could not initialize the obfuscator page.");
 }
-
-const renderOpcodes = (opcodes: ReturnType<typeof obfuscateWithMetadata>["opcodes"]) => {
-  opcodeList.replaceChildren();
-  for (const opcode of opcodes) {
-    const item = document.createElement("li");
-    const name = document.createElement("code");
-    const kind = document.createElement("span");
-    const value = document.createElement("span");
-    name.textContent = opcode.name;
-    kind.className = "debug-type";
-    kind.textContent = opcode.kind;
-    value.textContent = `0x${opcode.opcode.toString(16)}`;
-    item.append(name, kind, value);
-    opcodeList.append(item);
-  }
-};
-
-const renderGlobalCalls = (calls: ReturnType<typeof findGlobalCalls>) => {
-  globalCallList.replaceChildren();
-  globalCallCount.textContent = String(calls.length);
-
-  if (calls.length === 0) {
-    const emptyMessage = document.createElement("li");
-    emptyMessage.className = "debug-empty";
-    emptyMessage.textContent = "No global references detected.";
-    globalCallList.append(emptyMessage);
-    return;
-  }
-
-  for (const call of calls) {
-    const item = document.createElement("li");
-    const callee = document.createElement("code");
-    const type = document.createElement("span");
-    const location = document.createElement("span");
-    callee.textContent = call.callee;
-    type.className = "debug-type";
-    type.textContent = call.type;
-    location.className = "debug-location";
-    location.textContent = `${call.line}:${call.column}`;
-    item.append(callee, type, location);
-    globalCallList.append(item);
-  }
-};
-
-const globalApis = listGlobalApis();
-globalApiCount.textContent = String(globalApis.length);
-
-const renderGlobalApiMap = (query = "") => {
-  const normalizedQuery = query.trim().toLowerCase();
-  const matches = globalApis.filter(({ name }) =>
-    name.toLowerCase().includes(normalizedQuery),
-  );
-  globalApiList.replaceChildren();
-
-  if (matches.length === 0) {
-    const emptyMessage = document.createElement("li");
-    emptyMessage.className = "debug-empty";
-    emptyMessage.textContent = "No matching global APIs.";
-    globalApiList.append(emptyMessage);
-    return;
-  }
-
-  for (const api of matches) {
-    const item = document.createElement("li");
-    const name = document.createElement("code");
-    const type = document.createElement("span");
-    name.textContent = api.name;
-    type.className = "debug-type";
-    type.textContent = api.type;
-    item.append(name, type);
-    globalApiList.append(item);
-  }
-};
-
-renderGlobalApiMap();
-globalApiFilter.addEventListener("input", () => renderGlobalApiMap(globalApiFilter.value));
 
 const source = monaco.editor.create(sourceContainer, {
   value: `const canvas = document.createElement("canvas");
@@ -296,7 +205,7 @@ const onPreviewMessage = (event: MessageEvent<unknown>) => {
       line === undefined
         ? ""
         : ` at line ${line}${column === undefined ? "" : `, column ${column}`}`;
-    status.textContent = `Preview error${location}: ${event.data.message}`;
+    console.error(`Preview error${location}: ${event.data.message}`);
 
     const model = output.getModel();
     if (model && line !== undefined && line >= 1 && line <= model.getLineCount()) {
@@ -322,7 +231,7 @@ window.addEventListener("message", onPreviewMessage);
 previewButton.addEventListener("click", () => {
   const code = output.getValue();
   if (!code.trim()) {
-    status.textContent = "Obfuscate some code before running the preview.";
+    console.error("Obfuscate some code before running the preview.");
     return;
   }
 
@@ -337,7 +246,6 @@ var script=document.createElement("script");
 script.textContent=new TextDecoder().decode(bytes);
 document.body.appendChild(script);
 <\/script></body></html>`;
-  status.textContent = "Running obfuscated output; see the browser console for the canvas.";
 });
 
 async function minifyCode(code: string): Promise<string> {
@@ -375,16 +283,12 @@ form.addEventListener("submit", async (event) => {
     output.setValue("");
     previewButton.disabled = true;
     previewFrame.srcdoc = "";
-    renderGlobalCalls([]);
-    renderOpcodes([]);
-    status.textContent = "Enter some JavaScript code first.";
     return;
   }
 
   submitButton.disabled = true;
   previewButton.disabled = true;
   previewFrame.srcdoc = "";
-  status.textContent = "Formatting, minifying, and obfuscating code...";
 
   try {
     const model = source.getModel();
@@ -398,8 +302,8 @@ form.addEventListener("submit", async (event) => {
       plugins: [babelPlugin, estreePlugin],
     };
     const formattedSource = await format(sourceCode, options);
-    const result = obfuscateWithMetadata(formattedSource);
-    const minifiedOutput = await minifyCode(result.code);
+    const obfuscatedCode = obfuscate(formattedSource);
+    const minifiedOutput = await minifyCode(obfuscatedCode);
     const obfuscatedOutput = await format(minifiedOutput, options);
 
     source.pushUndoStop();
@@ -409,17 +313,11 @@ form.addEventListener("submit", async (event) => {
     source.pushUndoStop();
     output.setValue(obfuscatedOutput);
     previewButton.disabled = false;
-    renderGlobalCalls(findGlobalCalls(formattedSource));
-    renderOpcodes(result.opcodes);
-    status.textContent = "Done. VM control flow was flattened, then the output was minified and formatted for display.";
   } catch (error) {
     output.setValue("");
     previewButton.disabled = true;
     previewFrame.srcdoc = "";
-    renderGlobalCalls([]);
-    renderOpcodes([]);
     console.error("Could not format or obfuscate code.", error);
-    status.textContent = `Could not format or obfuscate code: ${error instanceof Error ? error.message : String(error)}`;
   } finally {
     source.updateOptions({ readOnly: false });
     submitButton.disabled = false;

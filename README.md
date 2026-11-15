@@ -11,8 +11,8 @@
 ## What it does
 
 Wobfus transforms JavaScript into a less readable form while aiming to preserve
-its behavior. The browser playground lets you edit, obfuscate, inspect, and run
-the result.
+its behavior. The browser playground lets you edit, obfuscate, and run the
+result.
 The playground uses a GitHub-inspired dark theme and the Wobfus trident logo.
 
 ## Lightweight VM output
