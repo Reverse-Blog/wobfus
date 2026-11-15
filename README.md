@@ -27,6 +27,25 @@ The GitHub Actions workflow builds and deploys the playground on pushes to
 the custom domain in Pages settings. The workflow includes the `CNAME` file in
 the deployed artifact.
 
+### Troubleshooting Pages
+
+In **Settings > Pages > Build and deployment > Source**, select **GitHub
+Actions**, not **Deploy from a branch**. Branch deployment runs Jekyll against
+the repository source and can overwrite the Vite deployment with an unbuilt
+page, even when the `Deploy playground` workflow succeeds.
+
+If the deployed page requests `src/preview.ts` and reports a `video/mp2t` module
+MIME type or missing Monaco styles, it is serving source files rather than the
+Vite build. GitHub Pages does not compile TypeScript or resolve npm imports;
+the development server does. Deploy only `site-dist/`, whose HTML references
+built JavaScript and CSS under `assets/`, including Monaco styles and workers.
+The relative asset base supports both a custom domain and a repository subpath.
+
+After changing the Pages source, rerun **Actions > Deploy playground > Run
+workflow**. Wait for deployment to finish, then reload without browser cache.
+If a CDN is in front of Pages and still serves the old HTML or cached asset
+404s, purge those cached responses as well.
+
 ## Lightweight VM output
 
 The demo keeps a simple virtual machine while prioritizing smaller output:
