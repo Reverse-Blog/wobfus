@@ -17,15 +17,18 @@ The playground uses a GitHub-inspired dark theme and the Wobfus trident logo.
 
 ## Playground deployment
 
-Run `npm run dev` for local development or `npm run build:site` to produce the
-static playground in `site-dist/`. `npm run build` remains the separate npm
-package build. The playground minifies generated code in the browser and does
+Run `npm run dev` for local development. `npm run build` produces both the npm
+package in `dist/` and the static playground in `site-dist/`, using separate
+entry points and Vite configurations. Use `npm run build:package` or
+`npm run build:site` to build only one target, and `npm run preview` to serve the
+built playground locally. The playground minifies generated code in the browser and does
 not require a server-side minification endpoint.
 
 The GitHub Actions workflow builds and deploys the playground on pushes to
 `main`. Set the repository's Pages source to **GitHub Actions** and configure
-the custom domain in Pages settings. The workflow includes the `CNAME` file in
-the deployed artifact.
+the custom domain in Pages settings. The site build includes `CNAME` and
+`.nojekyll`; deploy the entire `site-dist/` directory, not the repository root
+or the npm package's `dist/`.
 
 ### Troubleshooting Pages
 
@@ -33,6 +36,9 @@ In **Settings > Pages > Build and deployment > Source**, select **GitHub
 Actions**, not **Deploy from a branch**. Branch deployment runs Jekyll against
 the repository source and can overwrite the Vite deployment with an unbuilt
 page, even when the `Deploy playground` workflow succeeds.
+The workflow checks this setting before building and fails explicitly if
+branch deployment is enabled. Changing the Pages source requires repository
+administration access; the workflow does not silently change that setting.
 
 If the deployed page requests `src/preview.ts` and reports a `video/mp2t` module
 MIME type or missing Monaco styles, it is serving source files rather than the

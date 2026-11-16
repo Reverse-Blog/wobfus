@@ -21,14 +21,27 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Verify Pages deployment source
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pages } = await github.rest.repos.getPages(context.repo);
+            if (pages.build_type !== "workflow") {
+              core.setFailed(
+                "GitHub Pages is deploying repository source instead of the Vite bundle. " +
+                "Open Settings > Pages > Build and deployment > Source, select GitHub Actions, " +
+                "then rerun this workflow. Branch deployment overwrites the bundled site."
+              );
+            }
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build:site
-      - run: cp CNAME site-dist/CNAME
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
