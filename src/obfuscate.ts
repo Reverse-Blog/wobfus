@@ -1,5 +1,5 @@
-import { compileVm } from './vm-compiler.js';
-import { serializeVm } from './vm-runtime.js';
+import { compileVm } from './vm-compiler.ts';
+import { serializeVm } from './vm-runtime.ts';
 
 export function obfuscate(source: string): string {
   return obfuscateWithMetadata(source).code;

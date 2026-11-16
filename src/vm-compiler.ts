@@ -2,7 +2,7 @@ import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import type { Instruction, VmFunction, VmProgram } from './vm-runtime.js';
-import { flattenVmControlFlow } from './vm-control-flow.js';
+import { flattenVmControlFlow } from './vm-control-flow.ts';
 
 const instructionNames = [
   'constant', 'number', 'bigint', 'undefined', 'this', 'local', 'read', 'member',
