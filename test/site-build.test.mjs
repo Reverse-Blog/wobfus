@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "astro";
 
 for (const base of ["/", "/wobfus/"]) {
-  test(`builds a self-contained Astro Pages site at ${base}`, async () => {
+  test(`builds a self-contained static Astro site at ${base}`, async () => {
     const temporaryRoot = new URL("../.astro/", import.meta.url);
     await mkdir(temporaryRoot, { recursive: true });
     const directory = await mkdtemp(join(fileURLToPath(temporaryRoot), "site-test-"));
@@ -48,11 +48,6 @@ for (const base of ["/", "/wobfus/"]) {
       for (const worker of ["editor.worker-", "ts.worker-"]) {
         assert.ok([...files].some((file) => file.startsWith(`_astro/${worker}`)));
       }
-      assert.equal(
-        await readFile(join(directory, "CNAME"), "utf8"),
-        await readFile(new URL("../CNAME", import.meta.url), "utf8"),
-      );
-      assert.ok(files.has(".nojekyll"));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

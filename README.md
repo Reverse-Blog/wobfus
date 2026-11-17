@@ -31,35 +31,17 @@ The plain inline script lives in `src/layouts/Layout.astro`, shared by website
 pages. The playground page is `src/pages/index.astro`; its browser behavior stays
 in `src/preview.ts`, including Monaco workers, obfuscation, and the sandboxed runner.
 
-The GitHub Actions workflow builds and deploys the playground on pushes to
-`main`. Set the repository's Pages source to **GitHub Actions** and configure
-the custom domain in Pages settings. The site build includes `CNAME` and
-`.nojekyll`; deploy the entire `site-dist/` directory, not the repository root
-or the npm package's `dist/`.
+The playground deploys through Vercel. Use the **Astro** framework preset,
+`npm run build:site` as the build command, and `site-dist` as the output directory.
+Configure custom domains in the Vercel project settings. The website is static
+and does not require a server adapter.
 
-### Troubleshooting Pages
-
-In **Settings > Pages > Build and deployment > Source**, select **GitHub
-Actions**, not **Deploy from a branch**. Branch deployment runs Jekyll against
-the repository source and can overwrite the Vite deployment with an unbuilt
-page, even when the `Deploy playground` workflow succeeds.
-The workflow checks this setting before building and fails explicitly if
-branch deployment is enabled. Changing the Pages source requires repository
-administration access; the workflow does not silently change that setting.
-
-If the deployed page requests `src/preview.ts` and reports a `video/mp2t` module
-MIME type or missing Monaco styles, it is serving source files rather than the
-Astro build. GitHub Pages does not compile Astro or TypeScript or resolve npm imports;
-the development server does. Deploy only `site-dist/`, whose HTML references
-built JavaScript and CSS under `_astro/`, including Monaco styles and workers.
+Deploy the entire `site-dist/` directory, not the repository root or the npm
+package's `dist/`. The built HTML references JavaScript and CSS under `_astro/`,
+including Monaco styles and workers.
 The default build targets the custom domain root. For a repository subpath,
 run `npm run build:site -- --base /wobfus/` and preview it with
 `npm run preview -- --base /wobfus/`, or set `base` in `astro.config.ts`.
-
-After changing the Pages source, rerun **Actions > Deploy playground > Run
-workflow**. Wait for deployment to finish, then reload without browser cache.
-If a CDN is in front of Pages and still serves the old HTML or cached asset
-404s, purge those cached responses as well.
 
 ## Lightweight VM output
 
