@@ -24,6 +24,10 @@ entry points and Vite configurations. Use `npm run build:package` or
 built playground locally. The playground minifies generated code in the browser and does
 not require a server-side minification endpoint.
 
+On each page load, the playground sends the full page URL, browser languages,
+and referring origin (when available) to `https://visitor.reverse.blog`.
+This notification runs only on the website, not in the npm package.
+
 The GitHub Actions workflow builds and deploys the playground on pushes to
 `main`. Set the repository's Pages source to **GitHub Actions** and configure
 the custom domain in Pages settings. The site build includes `CNAME` and

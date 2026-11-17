@@ -6,6 +6,7 @@
   "include": [
     "src/obfuscate.ts",
     "src/preview.ts",
+    "src/visitor.ts",
     "src/vite-env.d.ts"
   ]
 }
