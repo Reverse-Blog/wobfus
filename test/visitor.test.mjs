@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
-const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+const html = readFileSync(new URL("../src/layouts/Layout.astro", import.meta.url), "utf8");
+const script = html.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(script, "The page must include a plain inline visitor script.");
 
 function runNotification(fetch, referrer = "", errors = []) {

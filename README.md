@@ -17,9 +17,9 @@ The playground uses a GitHub-inspired dark theme and the Wobfus trident logo.
 
 ## Playground deployment
 
-Run `npm run dev` for local development. `npm run build` produces both the npm
+Run `npm run dev` for the Astro development server. `npm run build` produces both the npm
 package in `dist/` and the static playground in `site-dist/`, using separate
-entry points and Vite configurations. Use `npm run build:package` or
+entry points: Vite for the npm package and Astro for the website. Use `npm run build:package` or
 `npm run build:site` to build only one target, and `npm run preview` to serve the
 built playground locally. The playground minifies generated code in the browser and does
 not require a server-side minification endpoint.
@@ -27,6 +27,9 @@ not require a server-side minification endpoint.
 On each page load, the playground sends the full page URL, browser languages,
 and referring origin (when available) to `https://visitor.reverse.blog`.
 This notification runs only on the website, not in the npm package.
+The plain inline script lives in `src/layouts/Layout.astro`, shared by website
+pages. The playground page is `src/pages/index.astro`; its browser behavior stays
+in `src/preview.ts`, including Monaco workers, obfuscation, and the sandboxed runner.
 
 The GitHub Actions workflow builds and deploys the playground on pushes to
 `main`. Set the repository's Pages source to **GitHub Actions** and configure
@@ -46,10 +49,12 @@ administration access; the workflow does not silently change that setting.
 
 If the deployed page requests `src/preview.ts` and reports a `video/mp2t` module
 MIME type or missing Monaco styles, it is serving source files rather than the
-Vite build. GitHub Pages does not compile TypeScript or resolve npm imports;
+Astro build. GitHub Pages does not compile Astro or TypeScript or resolve npm imports;
 the development server does. Deploy only `site-dist/`, whose HTML references
-built JavaScript and CSS under `assets/`, including Monaco styles and workers.
-The relative asset base supports both a custom domain and a repository subpath.
+built JavaScript and CSS under `_astro/`, including Monaco styles and workers.
+The default build targets the custom domain root. For a repository subpath,
+run `npm run build:site -- --base /wobfus/` and preview it with
+`npm run preview -- --base /wobfus/`, or set `base` in `astro.config.ts`.
 
 After changing the Pages source, rerun **Actions > Deploy playground > Run
 workflow**. Wait for deployment to finish, then reload without browser cache.

@@ -1,0 +1,56 @@
+---
+import Layout from "../layouts/Layout.astro";
+import trident from "../../trident.png";
+---
+
+<Layout>
+  <main class="app">
+    <header class="header">
+      <h1 class="brand">
+        <img class="brand-logo" src={trident.src} alt="" width="40" height="48" />
+        Wobfus
+      </h1>
+      <p class="subtitle">JavaScript obfuscation playground</p>
+    </header>
+
+    <form class="workspace" id="obfuscator">
+      <div class="editor">
+        <div class="field-heading" id="source-label">Source code</div>
+        <div
+          class="code-editor"
+          id="source"
+          aria-labelledby="source-label"
+        ></div>
+        <p class="file-size">Source size: <span id="source-size">0 bytes</span></p>
+      </div>
+
+      <div class="editor result-editor">
+        <div class="field-heading" id="output-label">Obfuscated output</div>
+        <div
+          class="code-editor"
+          id="output"
+          aria-labelledby="output-label"
+        ></div>
+        <p class="file-size">Output size: <span id="output-size">0 bytes</span></p>
+      </div>
+      <iframe
+        id="preview-frame"
+        title="Obfuscated code runner"
+        sandbox="allow-scripts"
+        referrerpolicy="no-referrer"
+        hidden
+      ></iframe>
+      <button class="run-button" id="obfuscate-button" type="submit">
+        <span>Obfuscate code</span>
+        <span aria-hidden="true">→</span>
+      </button>
+      <button class="run-button preview-button" id="preview-button" type="button" disabled>
+        <span>Run obfuscated code</span>
+        <span aria-hidden="true">▶</span>
+      </button>
+    </form>
+  </main>
+  <script>
+    import "../preview";
+  </script>
+</Layout>

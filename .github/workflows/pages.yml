@@ -28,7 +28,7 @@ jobs:
             const { data: pages } = await github.rest.repos.getPages(context.repo);
             if (pages.build_type !== "workflow") {
               core.setFailed(
-                "GitHub Pages is deploying repository source instead of the Vite bundle. " +
+                "GitHub Pages is deploying repository source instead of the Astro build. " +
                 "Open Settings > Pages > Build and deployment > Source, select GitHub Actions, " +
                 "then rerun this workflow. Branch deployment overwrites the bundled site."
               );

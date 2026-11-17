@@ -15,12 +15,12 @@
     "dist"
   ],
   "scripts": {
-    "dev": "vite --config vite.app.config.ts",
-    "preview": "vite preview --config vite.app.config.ts",
+    "dev": "astro dev",
+    "preview": "astro preview",
     "build": "npm run build:package && npm run build:site",
     "build:package": "vite build && tsc --emitDeclarationOnly",
-    "build:site": "vite build --config vite.app.config.ts",
-    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
+    "build:site": "astro build",
+    "check": "astro sync && tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "test": "node --test",
     "prepare": "npm run build:package",
     "prepublishOnly": "npm test && npm run check"
@@ -32,6 +32,7 @@
     "dompurify": "^3.4.17"
   },
   "devDependencies": {
+    "astro": "^7.4.12",
     "monaco-editor": "^0.57.0",
     "prettier": "^3.9.10",
     "terser": "^5.43.1",
