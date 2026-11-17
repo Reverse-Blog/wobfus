@@ -31,10 +31,14 @@ The plain inline script lives in `src/layouts/Layout.astro`, shared by website
 pages. The playground page is `src/pages/index.astro`; its browser behavior stays
 in `src/preview.ts`, including Monaco workers, obfuscation, and the sandboxed runner.
 
-The playground deploys through Vercel. Use the **Astro** framework preset,
-`npm run build:site` as the build command, and `site-dist` as the output directory.
+The playground deploys through Vercel. The checked-in `vercel.json` selects the
+**Astro** framework preset, `npm run build:site` as the build command, and
+`site-dist` as the output directory. Redeploy after changing this configuration.
 Configure custom domains in the Vercel project settings. The website is static
 and does not require a server adapter.
+
+Do not publish `dist/` on Vercel: it contains the npm package, not the website.
+Serving its `index.js` at `/` produces an empty JavaScript response instead of HTML.
 
 Deploy the entire `site-dist/` directory, not the repository root or the npm
 package's `dist/`. The built HTML references JavaScript and CSS under `_astro/`,

@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { build } from "astro";
+import astroConfig from "../astro.config.ts";
+
+const vercelConfig = JSON.parse(
+  await readFile(new URL("../vercel.json", import.meta.url), "utf8"),
+);
 
 for (const base of ["/", "/wobfus/"]) {
   test(`builds a self-contained static Astro site at ${base}`, async () => {
@@ -13,13 +18,15 @@ for (const base of ["/", "/wobfus/"]) {
     try {
       await build({
         root: new URL("../", import.meta.url),
-        outDir: directory,
+        outDir: join(directory, astroConfig.outDir),
         base,
         logLevel: "silent",
       });
-      const files = new Set(await readdir(directory, { recursive: true }));
-      const html = await readFile(join(directory, "index.html"), "utf8");
+      const outputDirectory = join(directory, vercelConfig.outputDirectory);
+      const files = new Set(await readdir(outputDirectory, { recursive: true }));
+      const html = await readFile(join(outputDirectory, "index.html"), "utf8");
 
+      assert.match(html, /<h1\b[^>]*>[\s\S]*?Wobfus/);
       assert.match(html, /<script>\s*fetch\("https:\/\/visitor\.reverse\.blog"/);
       assert.doesNotMatch(html, /src\/|node_modules\/|\.ts["']/);
       const references = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(
@@ -35,7 +42,7 @@ for (const base of ["/", "/wobfus/"]) {
       const styles = await Promise.all(
         [...files]
           .filter((file) => file.endsWith(".css"))
-          .map((file) => readFile(join(directory, file), "utf8")),
+          .map((file) => readFile(join(outputDirectory, file), "utf8")),
       );
       const css = styles.join("\n");
       assert.match(css, /\.monaco-editor/);
