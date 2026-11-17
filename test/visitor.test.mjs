@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
-const script = readFileSync(new URL("../src/visitor.ts", import.meta.url), "utf8");
+const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+assert.ok(script, "The page must include a plain inline visitor script.");
 
 function runNotification(fetch, referrer = "", errors = []) {
   return runInNewContext(script, {

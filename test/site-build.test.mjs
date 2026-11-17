@@ -15,6 +15,7 @@ test("builds a self-contained GitHub Pages site instead of serving TypeScript", 
   const files = new Map(outputs.map((output) => [output.fileName, output]));
   const html = String(files.get("index.html").source);
 
+  assert.match(html, /<script>\s*fetch\("https:\/\/visitor\.reverse\.blog"/);
   assert.doesNotMatch(html, /src\/|node_modules\/|\.ts["']/);
   const references = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(
     (match) => match[1],
